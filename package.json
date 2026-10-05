@@ -1,0 +1,22 @@
+{
+  "name": "feedback-agence",
+  "version": "1.0.0",
+  "description": "Feedback Agence",
+  "main": "main.js",
+  "author": "Agence",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win --publish never"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.agence.feedback",
+    "productName": "Feedback Agence",
+    "files": ["main.js", "preload.js", "index.html", "app.js", "icon.png"],
+    "win": { "target": "nsis", "icon": "icon.png" },
+    "nsis": { "oneClick": true, "perMachine": false }
+  }
+}
