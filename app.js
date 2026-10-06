@@ -132,28 +132,32 @@ async function render(auto = false) {
   });
 }
 
-/* ---------- Notifications : une bulle par feedback ---------- */
+/* ---------- Pop-up : un pour chaque feedback non lu ---------- */
 async function check() {
   try {
     const s = await validSession();
     if (!s) return;
-    const rows = await api(`feedbacks?agent_id=eq.${s.user_id}&lu=eq.false&select=id,message&order=created_at.asc`);
+    const rows = await api(`feedbacks?agent_id=eq.${s.user_id}&lu=eq.false&select=id,message,created_at&order=created_at.asc`);
     window.native.unread(rows.length);
-
-    const seen = store.get("notifiedIds") || [];
-    const fresh = rows.filter(r => !seen.includes(r.id));
-    fresh.slice(0, 5).forEach(r => {
-      const n = new Notification("Nouveau feedback", { body: r.message.slice(0, 250) });
-      n.onclick = () => window.native.show();
-    });
-    if (fresh.length > 5) {
-      new Notification("Nouveaux feedbacks", { body: `+ ${fresh.length - 5} autres feedbacks à lire.` })
-        .onclick = () => window.native.show();
-    }
-    store.set("notifiedIds", rows.map(r => r.id));
-    if (fresh.length) await render(true);
+    window.native.popup(rows.map(r => ({ id: r.id, message: r.message, date: r.created_at })));
+    await render(true);
   } catch (e) { console.error(e); }
 }
+
+async function markRead(id) {
+  await api(`feedbacks?id=eq.${id}`, { method: "PATCH", body: JSON.stringify({ lu: true }) });
+}
+window.native.onMarkRead(async id => {
+  try { await markRead(id); } catch (e) { console.error(e); }
+  check();
+});
+window.native.onReply(async ({ id, message }) => {
+  try {
+    await api("reponses", { method: "POST", body: JSON.stringify({ feedback_id: id, auteur_id: userId, message }) });
+    await markRead(id);
+  } catch (e) { console.error(e); }
+  check();
+});
 
 $("loginBtn").addEventListener("click", async () => {
   $("loginErr").textContent = "";
@@ -165,7 +169,6 @@ $("loginBtn").addEventListener("click", async () => {
 });
 $("logoutBtn").addEventListener("click", () => {
   store.del("session");
-  store.del("notifiedIds");
   init();
 });
 
