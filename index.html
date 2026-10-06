@@ -2,21 +2,33 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://*.supabase.co; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://*.supabase.co; img-src https://*.supabase.co data: blob:; style-src 'unsafe-inline'">
 <title>Feedback Agence</title>
 <style>
   body { font: 14px system-ui, "Segoe UI", sans-serif; margin: 0; padding: 14px; color: #1f2937; background: #f8fafc; }
   h3 { margin: 0 0 8px; font-size: 15px; }
   input, textarea, button { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 8px; font: inherit; border: 1px solid #d1d5db; border-radius: 6px; }
+  input[type=file] { padding: 5px; background: #fff; }
   button { background: #2563eb; color: #fff; border: 0; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
   button.link { background: none; color: #6b7280; width: auto; padding: 0; margin: 0; text-decoration: underline; }
   textarea { resize: vertical; min-height: 70px; }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .modele { font-size: 12px; color: #1d4ed8; margin-bottom: 12px; }
+  .legend { font-size: 11px; color: #6b7280; display: flex; gap: 12px; margin: 0 0 8px; }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
   .fb { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; margin-bottom: 8px; cursor: pointer; }
   .fb.unread { border-left: 4px solid #e11d48; background: #fff1f2; }
-  .meta { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
-  .msg { white-space: pre-wrap; }
-  .reply { margin: 6px 0 0 8px; padding-left: 8px; border-left: 3px solid #e5e7eb; }
+  .meta { font-size: 11px; color: #6b7280; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #dbeafe; color: #1d4ed8; }
+  .bubble { max-width: 88%; width: fit-content; padding: 8px 11px; border-radius: 12px; margin-top: 6px; }
+  .bubble .bm { font-size: 10px; opacity: .75; margin-bottom: 2px; }
+  .bubble .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .bubble.recv { background: #e5e7eb; color: #1f2937; margin-right: auto; border-bottom-left-radius: 3px; }
+  .bubble.sent { background: #2563eb; color: #fff; margin-left: auto; border-bottom-right-radius: 3px; }
+  .bubble img { display: block; max-width: 100%; max-height: 220px; margin-top: 6px; border-radius: 8px; cursor: zoom-in; }
+  .bubble img.zoom { max-height: none; cursor: zoom-out; }
+  .preview { max-width: 120px; max-height: 90px; border-radius: 6px; margin: 0 0 8px; display: block; }
   .err { color: #dc2626; font-size: 12px; min-height: 16px; }
   #login { max-width: 320px; margin: 60px auto 0; }
   [hidden] { display: none !important; }
@@ -32,7 +44,9 @@
   </div>
   <div id="main" hidden>
     <div class="top"><strong id="who"></strong><button id="logoutBtn" class="link">Déconnexion</button></div>
+    <div id="modele" class="modele" hidden></div>
     <h3>Mes feedbacks</h3>
+    <p class="legend"><span><i class="dot" style="background:#e5e7eb"></i>Reçu</span><span><i class="dot" style="background:#2563eb"></i>Envoyé par vous</span></p>
     <div id="list"></div>
   </div>
   <script src="app.js"></script>
