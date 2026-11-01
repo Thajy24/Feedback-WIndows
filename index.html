@@ -2,53 +2,1017 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https://*.supabase.co; img-src https://*.supabase.co data: blob:; style-src 'unsafe-inline'">
-<title>Feedback Agence</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Feedbacks</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  body { font: 14px system-ui, "Segoe UI", sans-serif; margin: 0; padding: 14px; color: #1f2937; background: #f8fafc; }
-  h3 { margin: 0 0 8px; font-size: 15px; }
-  input, textarea, button { width: 100%; box-sizing: border-box; margin-bottom: 8px; padding: 8px; font: inherit; border: 1px solid #d1d5db; border-radius: 6px; }
-  input[type=file] { padding: 5px; background: #fff; }
-  button { background: #2563eb; color: #fff; border: 0; cursor: pointer; }
-  button:disabled { opacity: .6; cursor: default; }
-  button.link { background: none; color: #6b7280; width: auto; padding: 0; margin: 0; text-decoration: underline; }
-  textarea { resize: vertical; min-height: 70px; }
-  .top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-  .modele { font-size: 12px; color: #1d4ed8; margin-bottom: 12px; }
-  .legend { font-size: 11px; color: #6b7280; display: flex; gap: 12px; margin: 0 0 8px; }
-  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
-  .fb { background: #fff; border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px; margin-bottom: 8px; cursor: pointer; }
-  .fb.unread { border-left: 4px solid #e11d48; background: #fff1f2; }
-  .meta { font-size: 11px; color: #6b7280; margin-bottom: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-  .tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #dbeafe; color: #1d4ed8; }
-  .bubble { max-width: 88%; width: fit-content; padding: 8px 11px; border-radius: 12px; margin-top: 6px; }
-  .bubble .bm { font-size: 10px; opacity: .75; margin-bottom: 2px; }
-  .bubble .txt { white-space: pre-wrap; overflow-wrap: anywhere; }
-  .bubble.recv { background: #e5e7eb; color: #1f2937; margin-right: auto; border-bottom-left-radius: 3px; }
-  .bubble.sent { background: #2563eb; color: #fff; margin-left: auto; border-bottom-right-radius: 3px; }
-  .bubble img { display: block; max-width: 100%; max-height: 220px; margin-top: 6px; border-radius: 8px; cursor: zoom-in; }
-  .bubble img.zoom { max-height: none; cursor: zoom-out; }
-  .preview { max-width: 120px; max-height: 90px; border-radius: 6px; margin: 0 0 8px; display: block; }
-  .err { color: #dc2626; font-size: 12px; min-height: 16px; }
-  #login { max-width: 320px; margin: 60px auto 0; }
-  [hidden] { display: none !important; }
+  :root { --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f8fafc; --accent:#2563eb; --alert:#e11d48; --recv:#e5e7eb; --ok:#15803d; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:900px; margin:0 auto; padding:24px 16px 48px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  h2 { font-size:16px; margin:24px 0 10px; }
+  .card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:16px; }
+  label { display:block; font-size:13px; color:var(--muted); margin:0 0 4px; }
+  input, select, textarea, button { font:inherit; width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:6px; margin-bottom:12px; }
+  input[type=file] { padding:6px; background:#fff; }
+  textarea { min-height:100px; resize:vertical; }
+  button { background:var(--accent); color:#fff; border:0; cursor:pointer; font-weight:600; }
+  button:disabled { opacity:.6; cursor:default; }
+  button.ghost { background:none; color:var(--muted); width:auto; padding:0; margin:0; font-weight:400; text-decoration:underline; }
+  :focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  .top { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:8px; }
+  .muted { color:var(--muted); }
+  .msg { min-height:20px; font-size:13px; margin:0; }
+  .err { color:var(--alert); } .ok { color:var(--ok); }
+  #login { max-width:360px; margin:12vh auto 0; }
+  .tablewrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { font-size:13px; color:var(--muted); font-weight:600; }
+  td.m { min-width:240px; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:99px; white-space:nowrap; }
+  .tag.unread { background:#ffe4e6; color:var(--alert); }
+  .tag.read { background:#dcfce7; color:var(--ok); }
+  .tag.model { background:#dbeafe; color:#1d4ed8; }
+  .tag.pending { background:#fef3c7; color:#92400e; }
+  .tag.email { background:#dbeafe; color:#1d4ed8; }
+  #agent { max-width:640px; }
+  .fb { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:10px; cursor:pointer; }
+  .fb.unread { border-left:4px solid var(--alert); background:#fff1f2; }
+  .fb > .meta { font-size:12px; color:var(--muted); margin-bottom:2px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+
+  .bubble { max-width:85%; width:fit-content; padding:8px 12px; border-radius:12px; margin-top:8px; }
+  .bubble .meta { font-size:11px; opacity:.75; margin-bottom:2px; }
+  .bubble .txt { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .bubble.sent { background:var(--accent); color:#fff; margin-left:auto; border-bottom-right-radius:3px; }
+  .bubble.recv { background:var(--recv); color:var(--ink); margin-right:auto; border-bottom-left-radius:3px; }
+  .bubble button.del { display:block; background:none; border:0; color:inherit; opacity:.75; text-decoration:underline; width:auto; padding:0; margin:4px 0 0; font-size:11px; font-weight:400; }
+  .bubble img { display:block; max-width:100%; max-height:260px; margin-top:6px; border-radius:8px; }
+  .legend { font-size:12px; color:var(--muted); display:flex; gap:12px; margin:0 0 8px; }
+  .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+  .preview { max-width:160px; max-height:120px; border-radius:6px; margin:0 0 12px; display:block; }
+  [hidden] { display:none !important; }
+
+  .account-grid { display:grid; gap:10px; }
+  .account-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .account-row:last-child { border-bottom:0; }
+  .account-info, .account-actions { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .account-actions select, .account-actions button { width:auto; margin:0; padding:6px 10px; }
+  .admin-note { font-size:13px; color:var(--muted); margin:0 0 12px; }
+
+  /* Onglets de l'espace admin */
+  .tabs { display:flex; gap:2px; overflow-x:auto; border-bottom:1px solid var(--line); margin:12px 0 18px; }
+  .tabs button { width:auto; margin:0; background:none; color:var(--muted); border-radius:6px 6px 0 0; padding:10px 14px; white-space:nowrap; font-weight:600; }
+  .tabs button:hover { background:#f1f5f9; }
+  .tabs button.active { color:var(--accent); box-shadow:inset 0 -2px 0 var(--accent); }
+  .badge { display:inline-block; min-width:18px; padding:0 6px; margin-left:6px; border-radius:99px; background:var(--alert); color:#fff; font-size:11px; line-height:18px; text-align:center; }
+  .badge:empty { display:none; }
+  .stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:8px; }
+  .stat { background:#fff; border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
+  .stat b { display:block; font-size:24px; line-height:1.2; }
+  .stat span { font-size:13px; color:var(--muted); }
+
+  /* Statut de connexion */
+  .pstat { font-size:12px; padding:2px 8px; border-radius:99px; white-space:nowrap; background:#f1f5f9; color:var(--muted); }
+  .pstat::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:#cbd5e1; margin-right:6px; }
+  .pstat.on { background:#dcfce7; color:var(--ok); }
+  .pstat.on::before { background:#16a34a; }
+  .online-row { display:flex; justify-content:space-between; gap:12px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .online-row:last-child { border-bottom:0; }
+  .chips { display:flex; gap:6px; margin:0 0 10px; }
+  .chips button { width:auto; margin:0; padding:5px 12px; background:#fff; color:var(--muted); border:1px solid var(--line); font-weight:400; font-size:13px; }
+  .chips button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
 </style>
 </head>
 <body>
-  <div id="login" hidden>
-    <h3>Connexion</h3>
-    <input id="email" type="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Mot de passe">
-    <button id="loginBtn">Se connecter</button>
-    <div id="loginErr" class="err"></div>
-  </div>
-  <div id="main" hidden>
-    <div class="top"><strong id="who"></strong><button id="logoutBtn" class="link">Déconnexion</button></div>
-    <div id="modele" class="modele" hidden></div>
-    <h3>Mes feedbacks</h3>
-    <p class="legend"><span><i class="dot" style="background:#e5e7eb"></i>Reçu</span><span><i class="dot" style="background:#2563eb"></i>Envoyé par vous</span></p>
-    <div id="list"></div>
-  </div>
-  <script src="app.js"></script>
+<main>
+
+  <!-- CONNEXION -->
+  <form id="login" class="card" hidden>
+    <h1 id="loginTitle">Connexion</h1>
+    <p class="muted" style="margin:0 0 16px">Accédez à votre espace feedbacks.</p>
+    <div id="nomRow" hidden>
+      <label for="nom">Nom complet</label>
+      <input id="nom" type="text" autocomplete="name">
+    </div>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="username" required>
+    <label for="password">Mot de passe</label>
+    <input id="password" type="password" autocomplete="current-password" minlength="6" required>
+    <button id="loginBtn" type="submit">Se connecter</button>
+    <p id="loginErr" class="msg err" role="alert"></p>
+    <button type="button" id="modeBtn" class="ghost">Pas de compte ? Créer un compte</button>
+  </form>
+
+  <!-- ESPACE ADMIN -->
+  <section id="admin" hidden>
+    <div class="top">
+      <div><h1>Espace admin</h1><span id="adminWho" class="muted"></span></div>
+      <button class="ghost logout">Se déconnecter</button>
+    </div>
+
+    <nav class="tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" data-tab="overview">Vue d'ensemble</button>
+      <button type="button" role="tab" data-tab="send">Envoyer</button>
+      <button type="button" role="tab" data-tab="history">Historique<span id="bHistory" class="badge"></span></button>
+      <button type="button" role="tab" data-tab="agents">Agents</button>
+      <button type="button" role="tab" data-tab="accounts">Inscriptions<span id="bAccounts" class="badge"></span></button>
+    </nav>
+
+    <!-- Vue d'ensemble -->
+    <div class="panel" data-panel="overview">
+      <div class="stats">
+        <div class="stat"><b id="stOnline">0</b><span>Agents en ligne</span></div>
+        <div class="stat"><b id="stAgents">0</b><span>Agents actifs</span></div>
+        <div class="stat"><b id="stPending">0</b><span>Inscriptions en attente</span></div>
+        <div class="stat"><b id="stReplies">0</b><span>Réponses non lues</span></div>
+      </div>
+      <h2>Connectés maintenant</h2>
+      <div id="onlineList" class="card"></div>
+    </div>
+
+    <!-- Envoyer -->
+    <div class="panel" data-panel="send" hidden>
+      <h2 style="margin-top:0">Envoyer un feedback</h2>
+      <div class="card">
+        <label for="target">Destinataire (un agent, un modèle ou tous)</label>
+        <select id="target"></select>
+        <label for="message">Message</label>
+        <textarea id="message"></textarea>
+        <label for="adminImg">Image (optionnel)</label>
+        <input id="adminImg" type="file" accept="image/*">
+        <img id="adminPrev" class="preview" alt="Aperçu" hidden>
+        <button id="sendBtn">Envoyer le feedback</button>
+        <div id="sendMsg" class="msg" role="status"></div>
+      </div>
+    </div>
+
+    <!-- Historique -->
+    <div class="panel" data-panel="history" hidden>
+      <h2 style="margin-top:0">Feedbacks envoyés</h2>
+      <p class="legend"><span><i class="dot" style="background:var(--accent)"></i>Envoyé par vous</span><span><i class="dot" style="background:var(--recv)"></i>Réponse de l'agent</span></p>
+      <label for="filter">Filtrer par agent</label>
+      <select id="filter"></select>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Date</th><th>Agent</th><th>Message</th><th>Statut</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Agents -->
+    <div class="panel" data-panel="agents" hidden>
+      <h2 style="margin-top:0">Ajouter un agent</h2>
+      <form id="addForm" class="card">
+        <label for="newNom">Nom complet</label>
+        <input id="newNom" type="text" required>
+        <label for="newEmail">Email</label>
+        <input id="newEmail" type="email" required>
+        <label for="newModele">Modèle (optionnel)</label>
+        <input id="newModele" type="text" list="modeles" autocomplete="off">
+        <label for="newPass">Mot de passe (6 caractères minimum)</label>
+        <input id="newPass" type="text" minlength="6" autocomplete="off" required>
+        <button id="addBtn" type="submit">Créer l'agent</button>
+        <p id="addMsg" class="msg" role="status"></p>
+      </form>
+      <datalist id="modeles"></datalist>
+
+      <div id="pendingBox" hidden>
+        <h2>Liste des agents</h2>
+        <div id="pending" class="card"></div>
+      </div>
+    </div>
+
+    <!-- Inscriptions et rôles -->
+    <div class="panel" data-panel="accounts" hidden>
+      <h2 style="margin-top:0">Inscriptions et rôles</h2>
+      <div class="card">
+        <p class="admin-note">
+          Une inscription n'est activée que si l'adresse email est confirmée et qu'un administrateur l'a validée.
+          L'admin peut également modifier le rôle.
+        </p>
+        <div id="accounts" class="account-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ESPACE AGENT -->
+  <section id="agent" hidden>
+    <div class="top">
+      <div><h1>Mes feedbacks</h1><span id="agentWho" class="muted"></span> <span class="pstat on" id="myStatus" hidden>Actif</span></div>
+      <button class="ghost logout">Se déconnecter</button>
+    </div>
+    <div class="chips" id="chips" hidden>
+      <button type="button" data-f="all" class="active">Tous</button>
+      <button type="button" data-f="unread">Non lus</button>
+    </div>
+    <p class="legend"><span><i class="dot" style="background:var(--recv)"></i>Reçu</span><span><i class="dot" style="background:var(--accent)"></i>Envoyé par vous</span></p>
+    <div id="mine"></div>
+  </section>
+
+</main>
+
+<script>
+const SUPABASE_URL = "https://mzjiyusbgtslfzchoykf.supabase.co";
+const SUPABASE_KEY = "sb_publishable_6JGumr_7n73O3U6MjRdgkw_5mZH46cc";
+const BUCKET = "feedback-images";
+const MAX_IMG = 5 * 1024 * 1024; // 5 Mo
+
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const $ = id => document.getElementById(id);
+let uid = null, agents = [], timer = null, mineFilter = "all", tab = "overview";
+
+function show(name) {
+  ["login", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
+}
+function option(value, text) {
+  const o = document.createElement("option");
+  o.value = value; o.textContent = text;
+  return o;
+}
+function group(label, opts) {
+  const g = document.createElement("optgroup");
+  g.label = label;
+  g.append(...opts);
+  return g;
+}
+const fmt = d => new Date(d).toLocaleString("fr-FR");
+
+/* ---------- Statut « actif » (Supabase Realtime Presence) ---------- */
+let channel = null, online = new Map(); // id utilisateur -> infos de présence
+
+function startPresence(me) {
+  if (channel) return; // déjà connecté
+  channel = db.channel("presence-feedbacks", { config: { presence: { key: me.id } } });
+  channel.on("presence", { event: "sync" }, () => {
+    online = new Map();
+    const state = channel.presenceState();
+    Object.keys(state).forEach(k => { if (state[k][0]) online.set(k, state[k][0]); });
+    refreshPresence();
+  });
+  channel.subscribe(async status => {
+    if (status === "SUBSCRIBED") await channel.track({ nom: me.nom, role: me.role, modele: me.modele || null, online_at: new Date().toISOString() });
+  });
+}
+async function stopPresence() {
+  if (!channel) return;
+  const c = channel; channel = null; online = new Map();
+  try { await c.untrack(); } catch (e) {}
+  await db.removeChannel(c);
+}
+function pstat(id) {
+  const s = document.createElement("span");
+  s.dataset.uid = id;
+  setPstat(s);
+  return s;
+}
+function setPstat(s) {
+  const on = online.has(s.dataset.uid);
+  s.className = "pstat" + (on ? " on" : "");
+  s.textContent = on ? "En ligne" : "Hors ligne";
+}
+function refreshPresence() {
+  document.querySelectorAll(".pstat[data-uid]").forEach(setPstat);
+  document.querySelectorAll("option[data-uid]").forEach(o => {
+    o.textContent = (online.has(o.dataset.uid) ? "🟢 " : "") + o.dataset.label;
+  });
+  renderOverview();
+}
+
+/* ---------- Application Windows (exe) : compteur et notifications ---------- */
+async function checkNotifs() {
+  try {
+    const { data: rows, error } = await db.from("feedbacks").select("id,message")
+      .eq("agent_id", uid).eq("lu", false).order("created_at", { ascending: true });
+    if (error || !rows) return;
+    window.native?.unread(rows.length);
+    if (!window.native) return; // notifications seulement dans l'exe
+    let seen = [];
+    try { seen = JSON.parse(localStorage.getItem("notifiedIds") || "[]"); } catch (e) {}
+    const fresh = rows.filter(r => !seen.includes(r.id));
+    fresh.slice(0, 5).forEach(r => {
+      const n = new Notification("Nouveau feedback", { body: (r.message || "Image reçue").slice(0, 250) });
+      n.onclick = () => window.native.show();
+    });
+    if (fresh.length > 5) {
+      new Notification("Nouveaux feedbacks", { body: `+ ${fresh.length - 5} autres feedbacks à lire.` })
+        .onclick = () => window.native.show();
+    }
+    localStorage.setItem("notifiedIds", JSON.stringify(rows.map(r => r.id)));
+    if (fresh.length) await loadMine(true);
+  } catch (e) { console.error(e); }
+}
+
+/* ---------- Images ---------- */
+async function uploadImage(file) {
+  if (!file) return null;
+  if (!file.type.startsWith("image/")) throw new Error("Le fichier doit être une image.");
+  if (file.size > MAX_IMG) throw new Error("Image trop lourde (5 Mo maximum).");
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
+  const { error } = await db.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+  if (error) throw new Error(error.message);
+  return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+function bindPreview(input, img) {
+  input.addEventListener("change", () => {
+    const f = input.files[0];
+    if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
+    if (f && f.type.startsWith("image/")) { img.src = URL.createObjectURL(f); img.hidden = false; }
+    else { img.removeAttribute("src"); img.hidden = true; }
+  });
+}
+function clearFile(input, img) {
+  input.value = "";
+  img.removeAttribute("src");
+  img.hidden = true;
+}
+
+/* Bulle de message : kind = "sent" (bleu) ou "recv" (gris) */
+function bubble(kind, metaText, text, imageUrl) {
+  const b = document.createElement("div");
+  b.className = "bubble " + kind;
+  const meta = document.createElement("div");
+  meta.className = "meta";
+  meta.textContent = metaText;
+  b.appendChild(meta);
+  if (text) {
+    const t = document.createElement("div");
+    t.className = "txt";
+    t.textContent = text;
+    b.appendChild(t);
+  }
+  if (imageUrl) {
+    const a = document.createElement("a");
+    a.href = imageUrl; a.target = "_blank"; a.rel = "noopener";
+    a.addEventListener("click", e => e.stopPropagation());
+    const img = document.createElement("img");
+    img.src = imageUrl; img.alt = "Image jointe"; img.loading = "lazy";
+    a.appendChild(img);
+    b.appendChild(a);
+  }
+  return b;
+}
+
+/* ---------- Onglets admin ---------- */
+function setTab(name) {
+  tab = name;
+  document.querySelectorAll(".tabs button").forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle("active", on);
+    b.setAttribute("aria-selected", on);
+  });
+  document.querySelectorAll("#admin .panel").forEach(p => { p.hidden = p.dataset.panel !== name; });
+}
+document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+
+let stats = { pending: 0, replies: 0 };
+function setBadge(el, n) { el.textContent = n > 0 ? String(n) : ""; }
+function renderOverview() {
+  if ($("admin").hidden) return;
+  const onlineAgents = [...online.entries()].filter(([, v]) => v.role === "agent");
+  $("stOnline").textContent = onlineAgents.length;
+  $("stAgents").textContent = agents.length;
+  $("stPending").textContent = stats.pending;
+  $("stReplies").textContent = stats.replies;
+
+  const box = $("onlineList");
+  box.replaceChildren();
+  if (!onlineAgents.length) { box.textContent = "Aucun agent connecté pour le moment."; return; }
+  onlineAgents.sort((a, b) => (a[1].nom || "").localeCompare(b[1].nom || "")).forEach(([id, v]) => {
+    const row = document.createElement("div");
+    row.className = "online-row";
+    const left = document.createElement("div");
+    left.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+    const n = document.createElement("strong");
+    n.textContent = v.nom || "Sans nom";
+    left.append(pstat(id), n);
+    if (v.modele) {
+      const m = document.createElement("span");
+      m.className = "tag model";
+      m.textContent = v.modele;
+      left.appendChild(m);
+    }
+    const since = document.createElement("span");
+    since.className = "muted";
+    since.style.fontSize = "13px";
+    since.textContent = "Connecté depuis " + new Date(v.online_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+    row.append(left, since);
+    box.appendChild(row);
+  });
+}
+
+/* ---------- Connexion et aiguillage selon le rôle ---------- */
+async function route() {
+  clearInterval(timer);
+  document.title = "Feedbacks";
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) { await stopPresence(); window.native?.unread(0); return show("login"); }
+
+  const { data: p } = await db.from("profiles").select("nom,email,role,actif,modele,email_confirme").eq("id", session.user.id).single();
+  if (!p) {
+    await stopPresence();
+    await db.auth.signOut();
+    show("login");
+    $("loginErr").textContent = "Ce compte n'a pas de profil. Contactez l'administrateur.";
+    return;
+  }
+  uid = session.user.id;
+  startPresence({ id: uid, nom: p.nom, role: p.role, modele: p.modele });
+  const who = p.nom + (p.modele ? " · Modèle : " + p.modele : "");
+  $("myStatus").hidden = false;
+
+  if (p.role === "admin") {
+    $("adminWho").textContent = p.nom;
+    show("admin");
+    setTab(tab);
+    await loadAgents();
+    await loadPending();
+    await loadAccounts();
+    await loadHistory();
+    renderOverview();
+    timer = setInterval(() => { loadHistory(); loadPending(); loadAccounts(); }, 30000);
+  } else if (!p.email_confirme) {
+    $("agentWho").textContent = who;
+    $("chips").hidden = true;
+    show("agent");
+    $("mine").textContent = "Votre email n'est pas encore confirmé. Consultez votre boîte mail avant de demander l'activation.";
+    timer = setInterval(route, 30000);
+  } else if (!p.actif) {
+    $("agentWho").textContent = who;
+    $("chips").hidden = true;
+    show("agent");
+    $("mine").textContent = "Votre compte est en attente de validation par l'administrateur.";
+    timer = setInterval(route, 30000);
+  } else {
+    $("agentWho").textContent = who;
+    $("chips").hidden = false;
+    show("agent");
+    await loadMine();
+    await checkNotifs();
+    timer = setInterval(() => { loadMine(true); checkNotifs(); }, 30000);
+  }
+}
+
+let signup = false;
+function setMode(on) {
+  signup = on;
+  $("nomRow").hidden = !on;
+  $("nom").required = on;
+  $("loginTitle").textContent = on ? "Créer un compte" : "Connexion";
+  $("loginBtn").textContent = on ? "Créer mon compte" : "Se connecter";
+  $("modeBtn").textContent = on ? "Déjà un compte ? Se connecter" : "Pas de compte ? Créer un compte";
+  $("password").autocomplete = on ? "new-password" : "current-password";
+  $("loginErr").textContent = "";
+}
+$("modeBtn").addEventListener("click", () => setMode(!signup));
+
+$("login").addEventListener("submit", async e => {
+  e.preventDefault();
+  const err = $("loginErr");
+  err.className = "msg err";
+  err.textContent = "";
+  $("loginBtn").disabled = true;
+  const email = $("email").value.trim(), password = $("password").value;
+
+  if (signup) {
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      err.textContent = "Veuillez utiliser une vraie adresse email valide.";
+      $("loginBtn").disabled = false;
+      return;
+    }
+    const r = await db.auth.signUp({ email, password, options: { data: { nom: $("nom").value.trim() } } });
+    $("loginBtn").disabled = false;
+    if (r.error) {
+      err.textContent = /registered|already/i.test(r.error.message)
+        ? "Cet email a déjà un compte."
+        : "Création impossible : " + r.error.message;
+      return;
+    }
+    if (!r.data.session) {
+      setMode(false);
+      err.className = "msg ok";
+      err.textContent = "Compte créé. Confirmez votre email, puis connectez-vous.";
+      return;
+    }
+  } else {
+    const { error } = await db.auth.signInWithPassword({ email, password });
+    $("loginBtn").disabled = false;
+    if (error) { err.textContent = "Email ou mot de passe incorrect."; return; }
+  }
+  $("password").value = "";
+  await route();
+});
+
+document.querySelectorAll(".logout").forEach(b => b.addEventListener("click", async () => {
+  clearInterval(timer);
+  await stopPresence(); // l'utilisateur passe « Hors ligne » immédiatement
+  window.native?.unread(0);
+  localStorage.removeItem("notifiedIds");
+  await db.auth.signOut();
+  tab = "overview";
+  show("login");
+  document.title = "Feedbacks";
+}));
+
+/* ---------- Espace admin ---------- */
+async function loadAgents() {
+  const { data } = await db.from("profiles").select("id,nom,modele").eq("role", "agent").eq("actif", true).order("nom");
+  agents = data || [];
+  const modeles = [...new Set(agents.map(a => (a.modele || "").trim()).filter(Boolean))].sort();
+  const label = a => a.nom + (a.modele ? " (" + a.modele + ")" : "");
+  const agentOpt = a => {
+    const o = option(a.id, label(a));
+    o.dataset.uid = a.id; o.dataset.label = label(a);
+    if (online.has(a.id)) o.textContent = "🟢 " + o.textContent;
+    return o;
+  };
+
+  const prev = $("target").value;
+  const children = [option("all", "Tous les agents")];
+  if (modeles.length) {
+    children.push(group("Par modèle", modeles.map(m => {
+      const n = agents.filter(a => a.modele === m).length;
+      return option("m:" + m, `Modèle : ${m} (${n} agent${n > 1 ? "s" : ""})`);
+    })));
+  }
+  children.push(group("Agents", agents.map(agentOpt)));
+  $("target").replaceChildren(...children);
+  if ([...$("target").options].some(o => o.value === prev)) $("target").value = prev;
+
+  const fprev = $("filter").value;
+  $("filter").replaceChildren(option("", "Tous les agents"), ...agents.map(agentOpt));
+  if ([...$("filter").options].some(o => o.value === fprev)) $("filter").value = fprev;
+
+  $("modeles").replaceChildren(...modeles.map(m => { const o = document.createElement("option"); o.value = m; return o; }));
+  renderOverview();
+}
+
+async function loadAccounts() {
+  const box = $("accounts");
+  const { data, error } = await db.rpc("admin_list_accounts");
+  if (error) {
+    box.textContent = "Impossible de charger les inscriptions : " + error.message;
+    return;
+  }
+  box.replaceChildren();
+  stats.pending = (data || []).filter(p => !p.actif).length;
+  setBadge($("bAccounts"), stats.pending);
+  renderOverview();
+  if (!data || !data.length) {
+    box.textContent = "Aucune inscription.";
+    return;
+  }
+
+  data.forEach(p => {
+    const row = document.createElement("div");
+    row.className = "account-row";
+
+    const info = document.createElement("div");
+    info.className = "account-info";
+
+    const name = document.createElement("strong");
+    name.textContent = p.nom || "Sans nom";
+
+    const email = document.createElement("span");
+    email.className = "muted";
+    email.textContent = p.email || "Email inconnu";
+
+    const emailTag = document.createElement("span");
+    emailTag.className = "tag " + (p.email_confirme ? "email" : "pending");
+    emailTag.textContent = p.email_confirme ? "Email confirmé" : "Email non confirmé";
+
+    const status = document.createElement("span");
+    status.className = "tag " + (p.actif ? "read" : "unread");
+    status.textContent = p.actif ? "Validé" : "En attente";
+
+    info.append(pstat(p.id), name, email, emailTag, status);
+
+    const actions = document.createElement("div");
+    actions.className = "account-actions";
+
+    const role = document.createElement("select");
+    role.setAttribute("aria-label", "Rôle de " + (p.nom || p.email));
+    ["agent", "admin"].forEach(r => {
+      const o = option(r, r === "agent" ? "Agent" : "Administrateur");
+      if (r === p.role) o.selected = true;
+      role.appendChild(o);
+    });
+
+    role.addEventListener("change", async () => {
+      const { error } = await db.rpc("admin_set_role", { target_id: p.id, new_role: role.value });
+      if (error) {
+        alert("Modification du rôle impossible : " + error.message);
+        await loadAccounts();
+        return;
+      }
+      await loadAccounts();
+      await loadAgents();
+      await loadPending();
+    });
+
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.textContent = p.actif ? "Désactiver" : "Valider";
+    toggle.style.background = p.actif ? "var(--alert)" : "var(--ok)";
+    toggle.disabled = !p.email_confirme && !p.actif;
+
+    toggle.addEventListener("click", async () => {
+      if (!p.email_confirme && !p.actif) {
+        alert("Impossible de valider : l'adresse email n'est pas encore confirmée.");
+        return;
+      }
+      const { error } = await db.rpc("admin_set_active", { target_id: p.id, new_active: !p.actif });
+      if (error) {
+        alert("Modification impossible : " + error.message);
+        return;
+      }
+      await loadAccounts();
+      await loadAgents();
+      await loadPending();
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.textContent = "Supprimer";
+    del.style.background = "var(--alert)";
+    del.addEventListener("click", async () => {
+      if (!confirm(`Supprimer ${p.nom || p.email} ?\nSon compte et ses données seront supprimés définitivement.`)) return;
+      del.disabled = true;
+      const { error } = await db.rpc("admin_delete_account", { target_id: p.id });
+      if (error) {
+        alert("Suppression impossible : " + error.message);
+        del.disabled = false;
+        return;
+      }
+      await loadAccounts();
+      await loadAgents();
+      await loadPending();
+      await loadHistory();
+    });
+
+    actions.append(role, toggle, del);
+    row.append(info, actions);
+    box.appendChild(row);
+  });
+}
+
+async function loadPending() {
+  const { data } = await db.from("profiles").select("id,nom,actif,modele").eq("role", "agent").order("actif").order("nom");
+  const list = $("pending");
+  list.replaceChildren();
+  $("pendingBox").hidden = !data || !data.length;
+  (data || []).forEach(p => {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;justify-content:space-between;align-items:center;gap:12px;padding:6px 0;flex-wrap:wrap";
+
+    const left = document.createElement("div");
+    left.style.cssText = "display:flex;gap:10px;align-items:center;flex-wrap:wrap";
+    const n = document.createElement("span");
+    n.textContent = p.nom;
+    const tag = document.createElement("span");
+    tag.className = "tag " + (p.actif ? "read" : "unread");
+    tag.textContent = p.actif ? "Validé" : "En attente";
+    left.append(pstat(p.id), n, tag);
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+    const small = "width:auto;margin:0;padding:6px 14px";
+
+    const mod = document.createElement("input");
+    mod.type = "text";
+    mod.placeholder = "Modèle";
+    mod.value = p.modele || "";
+    mod.setAttribute("list", "modeles");
+    mod.setAttribute("aria-label", "Modèle de " + p.nom);
+    mod.style.cssText = "width:140px;margin:0;padding:6px 10px";
+    mod.addEventListener("change", async () => {
+      const v = mod.value.trim() || null;
+      const { error } = await db.from("profiles").update({ modele: v }).eq("id", p.id);
+      if (error) { alert("Modification impossible : " + error.message); return; }
+      await loadAgents();
+    });
+    actions.appendChild(mod);
+
+    if (!p.actif) {
+      const ok = document.createElement("button");
+      ok.textContent = "Activer";
+      ok.style.cssText = small;
+      ok.addEventListener("click", async () => {
+        const { error } = await db.rpc("admin_set_active", { target_id: p.id, new_active: true });
+        if (error) { alert("Validation impossible : " + error.message); return; }
+        await loadAgents();
+        await loadPending();
+        await loadAccounts();
+      });
+      actions.appendChild(ok);
+    }
+
+    const del = document.createElement("button");
+    del.textContent = "Supprimer";
+    del.style.cssText = small + ";background:var(--alert)";
+    del.addEventListener("click", async () => {
+      if (!confirm(`Supprimer ${p.nom} ?\nSon compte et tous ses feedbacks seront effacés définitivement.`)) return;
+      del.disabled = true;
+      const { error } = await db.rpc("delete_agent", { target: p.id });
+      if (error) { alert("Suppression impossible : " + error.message); del.disabled = false; return; }
+      await loadAgents();
+      await loadPending();
+      await loadHistory();
+    });
+    actions.appendChild(del);
+
+    row.append(left, actions);
+    list.appendChild(row);
+  });
+}
+
+/* ---------- Suppression (admin) ---------- */
+function delLink(text, handler) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "del";
+  b.textContent = text;
+  b.addEventListener("click", ev => { ev.stopPropagation(); handler(b); });
+  return b;
+}
+async function removeFiles(urls) {
+  const marker = "/" + BUCKET + "/";
+  const paths = urls.filter(Boolean).map(u => u.includes(marker) ? decodeURIComponent(u.split(marker)[1].split("?")[0]) : null).filter(Boolean);
+  if (paths.length) await db.storage.from(BUCKET).remove(paths);
+}
+async function removeFeedback(f, reps) {
+  if (!confirm("Supprimer ce feedback et toutes ses réponses ?\nCette action est définitive.")) return;
+  await db.from("reponses").delete().eq("feedback_id", f.id);
+  const { data, error } = await db.from("feedbacks").delete().eq("id", f.id).select("id");
+  if (error || !data || !data.length) { alert("Suppression impossible" + (error ? " : " + error.message : " (droits manquants, voir le script SQL).")); return; }
+  await removeFiles([f.image_url, ...reps.map(r => r.image_url)]);
+  await loadHistory();
+}
+async function removeReply(r) {
+  if (!confirm("Supprimer cette réponse ?\nCette action est définitive.")) return;
+  const { data, error } = await db.from("reponses").delete().eq("id", r.id).select("id");
+  if (error || !data || !data.length) { alert("Suppression impossible" + (error ? " : " + error.message : " (droits manquants, voir le script SQL).")); return; }
+  await removeFiles([r.image_url]);
+  await loadHistory();
+}
+
+async function loadHistory() {
+  let q = db.from("feedbacks")
+    .select("id,message,image_url,modele,lu,created_at,agent:profiles!feedbacks_agent_id_fkey(nom),agent_id,reponses(id,message,image_url,created_at,lu_admin)")
+    .order("created_at", { ascending: false }).limit(100);
+  if ($("filter").value) q = q.eq("agent_id", $("filter").value);
+  const { data, error } = await q;
+  const tbody = $("rows");
+  tbody.replaceChildren();
+  if (error || !data.length) {
+    const td = tbody.insertRow().insertCell();
+    td.colSpan = 4;
+    td.textContent = error ? "Impossible de charger les feedbacks." : "Aucun feedback envoyé pour le moment.";
+    return;
+  }
+  let newReplies = 0;
+  data.forEach(f => {
+    const reps = (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+    const unreadReps = reps.filter(r => !r.lu_admin);
+    newReplies += unreadReps.length;
+
+    const tr = tbody.insertRow();
+    tr.insertCell().textContent = fmt(f.created_at);
+
+    const ag = tr.insertCell();
+    ag.append(pstat(f.agent_id), " ", f.agent?.nom || "Inconnu");
+    if (f.modele) {
+      const mt = document.createElement("div");
+      mt.className = "tag model";
+      mt.style.cssText = "display:inline-block;margin-top:4px";
+      mt.textContent = f.modele;
+      ag.append(document.createElement("br"), mt);
+    }
+
+    const m = tr.insertCell();
+    m.className = "m";
+    const fb = bubble("sent", "Vous · " + fmt(f.created_at), f.message, f.image_url);
+    fb.appendChild(delLink("Supprimer le feedback", () => removeFeedback(f, reps)));
+    m.appendChild(fb);
+    reps.forEach(r => {
+      const rb = bubble("recv", "Réponse · " + fmt(r.created_at), r.message, r.image_url);
+      rb.appendChild(delLink("Supprimer la réponse", () => removeReply(r)));
+      m.appendChild(rb);
+    });
+
+    const st = tr.insertCell();
+    const t = document.createElement("span");
+    t.className = "tag " + (f.lu ? "read" : "unread");
+    t.textContent = f.lu ? "Lu" : "Non lu";
+    st.appendChild(t);
+    if (unreadReps.length) {
+      const t2 = document.createElement("span");
+      t2.className = "tag unread";
+      t2.style.cssText = "display:inline-block;margin-top:4px";
+      t2.textContent = "Nouvelle réponse";
+      st.append(document.createElement("br"), t2);
+      tr.style.cursor = "pointer";
+      tr.title = "Cliquez pour marquer les réponses comme lues";
+      tr.addEventListener("click", async () => {
+        await db.from("reponses").update({ lu_admin: true }).eq("feedback_id", f.id).eq("lu_admin", false);
+        await loadHistory();
+      });
+    }
+  });
+  stats.replies = newReplies;
+  setBadge($("bHistory"), newReplies);
+  renderOverview();
+  document.title = newReplies ? `(${newReplies}) Espace admin` : "Feedbacks";
+}
+
+bindPreview($("adminImg"), $("adminPrev"));
+
+$("sendBtn").addEventListener("click", async () => {
+  const message = $("message").value.trim();
+  const file = $("adminImg").files[0];
+  const out = $("sendMsg");
+  out.className = "msg";
+  if (!message && !file) { out.className = "msg err"; out.textContent = "Écrivez un message ou ajoutez une image."; return; }
+
+  const sel = $("target").value;
+  const recipients = sel === "all" ? agents
+    : sel.startsWith("m:") ? agents.filter(a => a.modele === sel.slice(2))
+    : agents.filter(a => a.id === sel);
+  if (!recipients.length) { out.className = "msg err"; out.textContent = "Aucun destinataire."; return; }
+
+  $("sendBtn").disabled = true;
+  try {
+    const image_url = await uploadImage(file);
+    const { error } = await db.from("feedbacks").insert(
+      recipients.map(a => ({ agent_id: a.id, auteur_id: uid, message, image_url, modele: a.modele || null }))
+    );
+    if (error) throw new Error(error.message);
+  } catch (e) {
+    out.className = "msg err";
+    out.textContent = "Échec de l'envoi : " + e.message;
+    $("sendBtn").disabled = false;
+    return;
+  }
+  $("sendBtn").disabled = false;
+  $("message").value = "";
+  clearFile($("adminImg"), $("adminPrev"));
+  out.className = "msg ok";
+  out.textContent = recipients.length > 1 ? `Feedback envoyé à ${recipients.length} agents.` : "Feedback envoyé.";
+  await loadHistory();
+});
+
+/* ---------- Ajout d'un agent par l'admin ---------- */
+$("addForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const out = $("addMsg");
+  const fail = text => { out.className = "msg err"; out.textContent = text; $("addBtn").disabled = false; };
+  out.className = "msg";
+  out.textContent = "";
+  $("addBtn").disabled = true;
+
+  // Client temporaire sans session : la connexion de l'admin n'est pas touchée
+  const tmp = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "tmp-signup" }
+  });
+  const nom = $("newNom").value.trim(), email = $("newEmail").value.trim().toLowerCase();
+  const modele = $("newModele").value.trim() || null;
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    return fail("Veuillez saisir une vraie adresse email valide.");
+  }
+  const { data, error } = await tmp.auth.signUp({ email, password: $("newPass").value, options: { data: { nom } } });
+
+  if (error) {
+    return fail(/registered|already/i.test(error.message) ? "Cet email a déjà un compte." : "Création impossible : " + error.message);
+  }
+  if (!data.user || (data.user.identities && data.user.identities.length === 0)) {
+    return fail("Cet email a déjà un compte.");
+  }
+  const { error: upErr } = await db.from("profiles").update({ actif: false, modele }).eq("id", data.user.id);
+  if (upErr) return fail("Compte créé, mais l'activation a échoué : " + upErr.message);
+
+  e.target.reset();
+  out.className = "msg ok";
+  out.textContent = `Compte créé (${email}). L'utilisateur doit confirmer son email, puis vous pourrez valider son inscription.`;
+  $("addBtn").disabled = false;
+  await loadAgents();
+  await loadPending();
+  await loadAccounts();
+});
+
+$("filter").addEventListener("change", loadHistory);
+
+/* ---------- Espace agent ---------- */
+document.querySelectorAll("#chips button").forEach(b => b.addEventListener("click", () => {
+  mineFilter = b.dataset.f;
+  document.querySelectorAll("#chips button").forEach(x => x.classList.toggle("active", x === b));
+  loadMine();
+}));
+
+async function loadMine(auto = false) {
+  const list = $("mine");
+  // Ne pas effacer une réponse en cours de saisie lors de l'actualisation automatique
+  if (auto && ([...list.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement)
+      || [...list.querySelectorAll("input[type=file]")].some(i => i.files.length))) return;
+
+  const { data, error } = await db.from("feedbacks").select("*,reponses(id,message,image_url,created_at)").eq("agent_id", uid)
+    .order("created_at", { ascending: false }).limit(50);
+  list.replaceChildren();
+  if (error) { list.textContent = "Impossible de charger vos feedbacks."; return; }
+  if (!data.length) { list.textContent = "Aucun feedback pour le moment."; return; }
+
+  const unread = data.filter(f => !f.lu).length;
+  document.title = unread ? `(${unread}) Mes feedbacks` : "Mes feedbacks";
+  window.native?.unread(unread);
+
+  const shown = mineFilter === "unread" ? data.filter(f => !f.lu) : data;
+  if (!shown.length) { list.textContent = "Aucun feedback non lu."; return; }
+
+  shown.forEach(f => {
+    const div = document.createElement("div");
+    div.className = "fb" + (f.lu ? "" : " unread");
+    div.tabIndex = 0;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    const dt = document.createElement("span");
+    dt.textContent = fmt(f.created_at) + (f.lu ? "" : " · cliquez pour marquer comme lu");
+    meta.appendChild(dt);
+    if (f.modele) {
+      const mt = document.createElement("span");
+      mt.className = "tag model";
+      mt.textContent = "Modèle : " + f.modele;
+      meta.appendChild(mt);
+    }
+    div.appendChild(meta);
+
+    div.appendChild(bubble("recv", "Reçu", f.message, f.image_url));
+    (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach(r => {
+      div.appendChild(bubble("sent", "Votre réponse · " + fmt(r.created_at), r.message, r.image_url));
+    });
+
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "ghost";
+    open.style.marginTop = "8px";
+    open.textContent = "Répondre";
+    const box = document.createElement("div");
+    box.hidden = true;
+    box.style.marginTop = "8px";
+    const ta = document.createElement("textarea");
+    ta.placeholder = "Votre réponse...";
+    const fileLbl = document.createElement("label");
+    fileLbl.textContent = "Image (optionnel)";
+    const fi = document.createElement("input");
+    fi.type = "file"; fi.accept = "image/*";
+    const prev = document.createElement("img");
+    prev.className = "preview"; prev.alt = "Aperçu"; prev.hidden = true;
+    bindPreview(fi, prev);
+    const send = document.createElement("button");
+    send.type = "button";
+    send.textContent = "Envoyer la réponse";
+    const note = document.createElement("p");
+    note.className = "msg err";
+    box.append(ta, fileLbl, fi, prev, send, note);
+    open.addEventListener("click", ev => { ev.stopPropagation(); box.hidden = !box.hidden; if (!box.hidden) ta.focus(); });
+    box.addEventListener("click", ev => ev.stopPropagation());
+    send.addEventListener("click", async ev => {
+      ev.stopPropagation();
+      const message = ta.value.trim();
+      const file = fi.files[0];
+      if (!message && !file) return;
+      send.disabled = true;
+      note.textContent = "";
+      try {
+        const image_url = await uploadImage(file);
+        const { error: err } = await db.from("reponses").insert({ feedback_id: f.id, auteur_id: uid, message, image_url });
+        if (err) throw new Error(err.message);
+      } catch (e) {
+        note.textContent = "Envoi impossible : " + e.message;
+        send.disabled = false;
+        return;
+      }
+      ta.value = "";
+      clearFile(fi, prev);
+      await loadMine();
+    });
+    div.append(open, box);
+
+    if (!f.lu) {
+      const markRead = async () => {
+        await db.from("feedbacks").update({ lu: true }).eq("id", f.id);
+        await loadMine();
+      };
+      div.addEventListener("click", markRead, { once: true });
+      div.addEventListener("keydown", e => { if (e.target === div && e.key === "Enter") markRead(); });
+    }
+    list.appendChild(div);
+  });
+}
+
+route();
+</script>
 </body>
 </html>
