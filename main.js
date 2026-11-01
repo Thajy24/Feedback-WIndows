@@ -1,21 +1,25 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, screen } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require("electron");
 const path = require("path");
 
-// true  : le pop-up assombrit tout l'écran, l'agent doit répondre pour pouvoir cliquer ailleurs
-// false : simple fenêtre pop-up au centre, toujours au premier plan, sans bloquer le reste
-const BLOQUANT = true;
+// Adresse du site : toute modification du site apparaît automatiquement dans l'exe
+const SITE_URL = "https://feedback-flame-eight.vercel.app/";
+const ORIGIN = new URL(SITE_URL).origin;
 
 app.setAppUserModelId("com.agence.feedback");
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
-let win = null, tray = null, quitting = false;
-const queue = [], seen = new Set(), overlays = [];
+let win = null, tray = null, quitting = false, retry = null, lastLoad = 0;
 
 function showWin() {
   if (!win) return;
   win.show();
   win.focus();
+}
+
+function loadSite() {
+  clearTimeout(retry);
+  win.loadURL(SITE_URL).catch(() => {}); // les erreurs sont gérées par did-fail-load
 }
 
 function createWindow() {
@@ -25,72 +29,49 @@ function createWindow() {
     show: !process.argv.includes("--hidden"),
     autoHideMenuBar: true,
     icon: path.join(__dirname, "icon.png"),
-    webPreferences: { preload: path.join(__dirname, "preload.js"), backgroundThrottling: false }
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      backgroundThrottling: false,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
   });
-  win.loadFile("index.html");
+
+  loadSite();
+
+  // Pas d'internet : page de secours, puis nouvel essai toutes les 10 secondes
+  win.webContents.on("did-fail-load", (_e, code, _desc, _url, isMainFrame) => {
+    if (!isMainFrame || code === -3) return; // -3 = chargement annulé
+    win.loadFile(path.join(__dirname, "offline.html"));
+    clearTimeout(retry);
+    retry = setTimeout(loadSite, 10000);
+  });
+  win.webContents.on("did-finish-load", () => {
+    if (win.webContents.getURL().startsWith(ORIGIN)) lastLoad = Date.now();
+  });
+
+  // Sécurité : seule la page du site peut s'afficher ; les autres liens s'ouvrent dans le navigateur
+  win.webContents.on("will-navigate", (e, url) => {
+    if (!url.startsWith(ORIGIN) && !url.startsWith("file://")) e.preventDefault();
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("https://")) shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  // Fermer la fenêtre la met dans la zone de notification : l'appli continue de tourner
   win.on("close", e => {
     if (!quitting) { e.preventDefault(); win.hide(); }
   });
-}
 
-/* ---------- Pop-up de feedback (un à la fois, dans l'ordre d'arrivée) ---------- */
-function createOverlays(item) {
-  const primaryId = screen.getPrimaryDisplay().id;
-  const displays = BLOQUANT ? screen.getAllDisplays() : [screen.getPrimaryDisplay()];
-  displays.forEach(d => {
-    const isPrimary = d.id === primaryId;
-    const geometry = BLOQUANT
-      ? { x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height, transparent: true }
-      : { width: 480, height: 430, center: true };
-    const w = new BrowserWindow({
-      ...geometry,
-      frame: false, resizable: false, movable: false, minimizable: false, maximizable: false,
-      skipTaskbar: true, alwaysOnTop: true, fullscreenable: false, hasShadow: false, show: false,
-      webPreferences: { preload: path.join(__dirname, "preload.js"), backgroundThrottling: false }
-    });
-    w.setAlwaysOnTop(true, "screen-saver");
-    w.on("close", e => e.preventDefault()); // impossible de fermer sans répondre
-    w.loadFile("popup.html", { query: { primary: isPrimary ? "1" : "0", block: BLOQUANT ? "1" : "0" } });
-    w.once("ready-to-show", () => { w.show(); if (isPrimary) w.focus(); });
-    if (isPrimary) {
-      w.webContents.once("did-finish-load", () => {
-        w.webContents.send("data", { ...item, remaining: queue.length });
-      });
-    }
-    overlays.push(w);
+  // Reprendre la dernière version du site quand l'agent rouvre la fenêtre (si > 10 min)
+  win.on("show", () => {
+    if (Date.now() - lastLoad > 10 * 60 * 1000) loadSite();
   });
+  // Fenêtre cachée pendant des heures : rechargement discret toutes les 6 h
+  setInterval(() => { if (!win.isVisible()) loadSite(); }, 6 * 3600 * 1000);
 }
-
-function closeOverlays() {
-  overlays.splice(0).forEach(w => w.destroy());
-}
-
-function next() {
-  if (overlays.length || !queue.length) return;
-  createOverlays(queue.shift());
-}
-
-ipcMain.on("popup", (_e, items) => {
-  items.forEach(it => {
-    if (!seen.has(it.id)) { seen.add(it.id); queue.push(it); }
-  });
-  next();
-});
-ipcMain.on("ack", (_e, id) => {
-  closeOverlays();
-  if (win) win.webContents.send("mark-read", id);
-  setTimeout(next, 400);
-});
-ipcMain.on("reply", (_e, payload) => {
-  closeOverlays();
-  if (win) win.webContents.send("reply", payload);
-  setTimeout(next, 400);
-});
-
-ipcMain.on("show", showWin);
-ipcMain.on("unread", (_e, n) => {
-  if (tray) tray.setToolTip(n ? `Feedback Agence · ${n} non lu${n > 1 ? "s" : ""}` : "Feedback Agence");
-});
 
 app.on("second-instance", showWin);
 
@@ -102,8 +83,15 @@ app.whenReady().then(() => {
   tray.setToolTip("Feedback Agence");
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: "Ouvrir", click: showWin },
-    { label: "Quitter", click: () => { quitting = true; closeOverlays(); app.quit(); } }
+    { label: "Quitter", click: () => { quitting = true; app.quit(); } }
   ]));
   tray.on("click", showWin);
+  // Démarre avec Windows, en arrière-plan
   app.setLoginItemSettings({ openAtLogin: true, args: ["--hidden"] });
+});
+
+ipcMain.on("show", showWin);
+ipcMain.on("unread", (_e, n) => {
+  if (tray) tray.setToolTip(n ? `Feedback Agence · ${n} non lu${n > 1 ? "s" : ""}` : "Feedback Agence");
+  if (n && win && !win.isFocused()) win.flashFrame(true);
 });
