@@ -83,6 +83,31 @@
   .chips { display:flex; gap:6px; margin:0 0 10px; }
   .chips button { width:auto; margin:0; padding:5px 12px; background:#fff; color:var(--muted); border:1px solid var(--line); font-weight:400; font-size:13px; }
   .chips button.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+
+  /* Classeur (admin) */
+  .classeur { display:grid; grid-template-columns:250px 1fr; gap:14px; align-items:start; }
+  @media (max-width:700px) { .classeur { grid-template-columns:1fr; } }
+  .folders { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px; }
+  .folders input { margin-bottom:8px; }
+  .drawer { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:10px 4px 4px; }
+  button.folder { display:flex; align-items:center; gap:8px; width:100%; margin:0 0 4px; padding:8px 10px; background:#f8fafc; color:var(--ink); border:1px solid var(--line); border-left:4px solid #cbd5e1; font-weight:600; text-align:left; }
+  button.folder:hover { background:#f1f5f9; }
+  button.folder.active { background:#eff6ff; border-left-color:var(--accent); }
+  button.folder .nm { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  button.folder .ct { font-weight:400; font-size:12px; color:var(--muted); }
+  .pdot { display:inline-block; width:8px; height:8px; border-radius:50%; background:#cbd5e1; flex:none; }
+  .pdot.on { background:#16a34a; }
+  .folderView { min-width:0; }
+  #folderHead { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+  #folderHead button { width:auto; margin:0 0 0 auto; padding:5px 12px; font-size:13px; }
+  .month { margin:18px 0 8px; padding:4px 12px; display:inline-block; background:#e2e8f0; border-radius:6px 6px 0 0; font-size:12px; font-weight:600; text-transform:capitalize; color:var(--muted); }
+  .thread-card { background:#fff; border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:10px; }
+  .thread-card.unread { border-left:4px solid var(--alert); background:#fff1f2; }
+  .thread-card .bar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-top:8px; }
+  .thread-card .bar button { width:auto; margin:0; padding:4px 10px; font-size:12px; }
+  .thread-card .bar button.ghost { padding:0; font-size:12px; }
+  .thread-card .replybox { margin-top:8px; }
+  .thread-card .replybox textarea { min-height:60px; }
 </style>
 </head>
 <body>
@@ -115,7 +140,7 @@
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button type="button" role="tab" data-tab="overview">Vue d'ensemble</button>
       <button type="button" role="tab" data-tab="send">Envoyer</button>
-      <button type="button" role="tab" data-tab="history">Historique<span id="bHistory" class="badge"></span></button>
+      <button type="button" role="tab" data-tab="history">Classeur<span id="bHistory" class="badge"></span></button>
       <button type="button" role="tab" data-tab="agents">Agents</button>
       <button type="button" role="tab" data-tab="accounts">Inscriptions<span id="bAccounts" class="badge"></span></button>
     </nav>
@@ -126,7 +151,7 @@
         <div class="stat"><b id="stOnline">0</b><span>Agents en ligne</span></div>
         <div class="stat"><b id="stAgents">0</b><span>Agents actifs</span></div>
         <div class="stat"><b id="stPending">0</b><span>Inscriptions en attente</span></div>
-        <div class="stat"><b id="stReplies">0</b><span>Réponses non lues</span></div>
+        <div class="stat"><b id="stReplies">0</b><span>Messages non lus</span></div>
       </div>
       <h2>Connectés maintenant</h2>
       <div id="onlineList" class="card"></div>
@@ -148,17 +173,24 @@
       </div>
     </div>
 
-    <!-- Historique -->
+    <!-- Classeur -->
     <div class="panel" data-panel="history" hidden>
-      <h2 style="margin-top:0">Feedbacks envoyés</h2>
-      <p class="legend"><span><i class="dot" style="background:var(--accent)"></i>Envoyé par vous</span><span><i class="dot" style="background:var(--recv)"></i>Réponse de l'agent</span></p>
-      <label for="filter">Filtrer par agent</label>
-      <select id="filter"></select>
-      <div class="tablewrap">
-        <table>
-          <thead><tr><th>Date</th><th>Agent</th><th>Message</th><th>Statut</th></tr></thead>
-          <tbody id="rows"></tbody>
-        </table>
+      <h2 style="margin-top:0">Classeur des messages</h2>
+      <div class="classeur">
+        <aside class="folders">
+          <input id="folderSearch" type="search" placeholder="Rechercher un agent ou un mot…" aria-label="Rechercher">
+          <div id="folderList"></div>
+        </aside>
+        <section class="folderView">
+          <div id="folderHead" class="muted">Choisissez un agent dans le classeur.</div>
+          <div class="chips" id="threadChips" hidden>
+            <button type="button" data-v="all" class="active">Tous</button>
+            <button type="button" data-v="unread">Non lus</button>
+            <button type="button" data-v="agent">De l'agent</button>
+            <button type="button" data-v="admin">Envoyés par vous</button>
+          </div>
+          <div id="thread"></div>
+        </section>
       </div>
     </div>
 
@@ -203,6 +235,18 @@
     <div class="top">
       <div><h1>Mes feedbacks</h1><span id="agentWho" class="muted"></span> <span class="pstat on" id="myStatus" hidden>Actif</span></div>
       <button class="ghost logout">Se déconnecter</button>
+    </div>
+    <div id="composeWrap" hidden>
+      <button type="button" id="composeOpen">✉️ Envoyer un message</button>
+      <div id="composeBox" class="card" hidden style="margin-bottom:12px">
+        <label for="composeText">Votre message à l'administrateur</label>
+        <textarea id="composeText"></textarea>
+        <label for="composeImg">Image (optionnel)</label>
+        <input id="composeImg" type="file" accept="image/*">
+        <img id="composePrev" class="preview" alt="Aperçu" hidden>
+        <button type="button" id="composeSend">Envoyer</button>
+        <p id="composeMsg" class="msg" role="status"></p>
+      </div>
     </div>
     <div class="chips" id="chips" hidden>
       <button type="button" data-f="all" class="active">Tous</button>
@@ -275,6 +319,7 @@ function setPstat(s) {
 }
 function refreshPresence() {
   document.querySelectorAll(".pstat[data-uid]").forEach(setPstat);
+  document.querySelectorAll(".pdot[data-uid]").forEach(x => x.classList.toggle("on", online.has(x.dataset.uid)));
   document.querySelectorAll("option[data-uid]").forEach(o => {
     o.textContent = (online.has(o.dataset.uid) ? "🟢 " : "") + o.dataset.label;
   });
@@ -414,6 +459,8 @@ async function route() {
   }
   uid = session.user.id;
   startPresence({ id: uid, nom: p.nom, role: p.role, modele: p.modele });
+  myModele = p.modele || null;
+  $("composeWrap").hidden = true;
   const who = p.nom + (p.modele ? " · Modèle : " + p.modele : "");
   $("myStatus").hidden = false;
 
@@ -426,7 +473,7 @@ async function route() {
     await loadAccounts();
     await loadHistory();
     renderOverview();
-    timer = setInterval(() => { loadHistory(); loadPending(); loadAccounts(); }, 30000);
+    timer = setInterval(() => { loadHistory(true); loadPending(); loadAccounts(); }, 30000);
   } else if (!p.email_confirme) {
     $("agentWho").textContent = who;
     $("chips").hidden = true;
@@ -443,6 +490,7 @@ async function route() {
     $("agentWho").textContent = who;
     $("chips").hidden = false;
     show("agent");
+    $("composeWrap").hidden = false;
     await loadMine();
     await checkNotifs();
     timer = setInterval(() => { loadMine(true); checkNotifs(); }, 30000);
@@ -535,12 +583,9 @@ async function loadAgents() {
   $("target").replaceChildren(...children);
   if ([...$("target").options].some(o => o.value === prev)) $("target").value = prev;
 
-  const fprev = $("filter").value;
-  $("filter").replaceChildren(option("", "Tous les agents"), ...agents.map(agentOpt));
-  if ([...$("filter").options].some(o => o.value === fprev)) $("filter").value = fprev;
-
   $("modeles").replaceChildren(...modeles.map(m => { const o = document.createElement("option"); o.value = m; return o; }));
   renderOverview();
+  if (!$("admin").hidden) renderClasseur();
 }
 
 async function loadAccounts() {
@@ -752,74 +797,197 @@ async function removeReply(r) {
   await loadHistory();
 }
 
-async function loadHistory() {
-  let q = db.from("feedbacks")
-    .select("id,message,image_url,modele,lu,created_at,agent:profiles!feedbacks_agent_id_fkey(nom),agent_id,reponses(id,message,image_url,created_at,lu_admin)")
-    .order("created_at", { ascending: false }).limit(100);
-  if ($("filter").value) q = q.eq("agent_id", $("filter").value);
-  const { data, error } = await q;
-  const tbody = $("rows");
-  tbody.replaceChildren();
-  if (error || !data.length) {
-    const td = tbody.insertRow().insertCell();
-    td.colSpan = 4;
-    td.textContent = error ? "Impossible de charger les feedbacks." : "Aucun feedback envoyé pour le moment.";
+/* ---------- Classeur : agents (dossiers) rangés par modèle (tiroirs) et par mois (intercalaires) ---------- */
+let store = [], view = { agent: null, v: "all", q: "" };
+const unreadOf = f => (f.origine === "agent" && f.lu_admin === false ? 1 : 0) + (f.reponses || []).filter(r => !r.lu_admin).length;
+const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement);
+
+async function loadHistory(auto = false) {
+  const { data, error } = await db.from("feedbacks")
+    .select("id,message,image_url,modele,lu,origine,lu_admin,created_at,agent_id,agent:profiles!feedbacks_agent_id_fkey(nom,modele),reponses(id,message,image_url,created_at,lu_admin)")
+    .order("created_at", { ascending: false }).limit(500);
+  if (error) {
+    $("folderList").textContent = "Impossible de charger les messages : " + error.message + " (le script SQL a-t-il été exécuté ?)";
     return;
   }
-  let newReplies = 0;
-  data.forEach(f => {
-    const reps = (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
-    const unreadReps = reps.filter(r => !r.lu_admin);
-    newReplies += unreadReps.length;
+  store = data || [];
+  const total = store.reduce((n, f) => n + unreadOf(f), 0);
+  stats.replies = total;
+  setBadge($("bHistory"), total);
+  renderOverview();
+  document.title = total ? `(${total}) Espace admin` : "Feedbacks";
+  if (auto && typingInThread()) return; // ne pas effacer une réponse en cours de saisie
+  renderClasseur();
+}
 
-    const tr = tbody.insertRow();
-    tr.insertCell().textContent = fmt(f.created_at);
+function renderClasseur() {
+  const q = view.q.trim().toLowerCase();
+  const map = new Map();
+  agents.forEach(a => map.set(a.id, { id: a.id, nom: a.nom, modele: a.modele || null, items: [] }));
+  store.forEach(f => {
+    if (!map.has(f.agent_id)) map.set(f.agent_id, { id: f.agent_id, nom: f.agent?.nom || "Inconnu", modele: f.agent?.modele || f.modele || null, items: [] });
+    map.get(f.agent_id).items.push(f);
+  });
+  const hit = f => (f.message || "").toLowerCase().includes(q) || (f.reponses || []).some(r => (r.message || "").toLowerCase().includes(q));
+  const folders = [...map.values()].filter(d => !q || d.nom.toLowerCase().includes(q) || d.items.some(hit))
+    .sort((a, b) => a.nom.localeCompare(b.nom));
 
-    const ag = tr.insertCell();
-    ag.append(pstat(f.agent_id), " ", f.agent?.nom || "Inconnu");
-    if (f.modele) {
-      const mt = document.createElement("div");
-      mt.className = "tag model";
-      mt.style.cssText = "display:inline-block;margin-top:4px";
-      mt.textContent = f.modele;
-      ag.append(document.createElement("br"), mt);
-    }
+  const drawers = new Map();
+  folders.forEach(d => { const k = d.modele || "Sans modèle"; if (!drawers.has(k)) drawers.set(k, []); drawers.get(k).push(d); });
 
-    const m = tr.insertCell();
-    m.className = "m";
-    const fb = bubble("sent", "Vous · " + fmt(f.created_at), f.message, f.image_url);
-    fb.appendChild(delLink("Supprimer le feedback", () => removeFeedback(f, reps)));
-    m.appendChild(fb);
-    reps.forEach(r => {
-      const rb = bubble("recv", "Réponse · " + fmt(r.created_at), r.message, r.image_url);
-      rb.appendChild(delLink("Supprimer la réponse", () => removeReply(r)));
-      m.appendChild(rb);
+  const list = $("folderList");
+  list.replaceChildren();
+  if (!folders.length) list.textContent = "Aucun dossier.";
+  [...drawers.keys()].sort().forEach(k => {
+    const h = document.createElement("div");
+    h.className = "drawer";
+    h.textContent = "Modèle : " + k;
+    list.appendChild(h);
+    drawers.get(k).forEach(d => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "folder" + (d.id === view.agent ? " active" : "");
+      const dot = document.createElement("span");
+      dot.className = "pdot" + (online.has(d.id) ? " on" : "");
+      dot.dataset.uid = d.id;
+      const nm = document.createElement("span");
+      nm.className = "nm";
+      nm.textContent = d.nom;
+      const ct = document.createElement("span");
+      ct.className = "ct";
+      ct.textContent = d.items.length;
+      b.append(dot, nm, ct);
+      const un = d.items.reduce((n, f) => n + unreadOf(f), 0);
+      if (un) { const bd = document.createElement("span"); bd.className = "badge"; bd.style.margin = "0"; bd.textContent = un; b.appendChild(bd); }
+      b.addEventListener("click", () => { view.agent = d.id; renderClasseur(); });
+      list.appendChild(b);
     });
+  });
+  renderThread(map.get(view.agent), q, hit);
+}
 
-    const st = tr.insertCell();
+async function markRead(items) {
+  const fids = items.filter(f => f.origine === "agent" && f.lu_admin === false).map(f => f.id);
+  const rids = items.filter(f => (f.reponses || []).some(r => !r.lu_admin)).map(f => f.id);
+  if (fids.length) {
+    const { error } = await db.from("feedbacks").update({ lu_admin: true }).in("id", fids);
+    if (error) { alert("Modification impossible : " + error.message); return; }
+  }
+  if (rids.length) await db.from("reponses").update({ lu_admin: true }).in("feedback_id", rids).eq("lu_admin", false);
+  await loadHistory();
+}
+
+function threadCard(f, agentName) {
+  const fromAgent = f.origine === "agent";
+  const reps = (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+  const card = document.createElement("div");
+  card.className = "thread-card" + (unreadOf(f) ? " unread" : "");
+
+  const fb = bubble(fromAgent ? "recv" : "sent", (fromAgent ? "Message de l'agent · " : "Vous · ") + fmt(f.created_at), f.message, f.image_url);
+  fb.appendChild(delLink("Supprimer le message", () => removeFeedback(f, reps)));
+  card.appendChild(fb);
+  reps.forEach(r => {
+    const rb = bubble("recv", "Réponse de l'agent · " + fmt(r.created_at), r.message, r.image_url);
+    rb.appendChild(delLink("Supprimer la réponse", () => removeReply(r)));
+    card.appendChild(rb);
+  });
+
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  if (!fromAgent) {
     const t = document.createElement("span");
     t.className = "tag " + (f.lu ? "read" : "unread");
-    t.textContent = f.lu ? "Lu" : "Non lu";
-    st.appendChild(t);
-    if (unreadReps.length) {
-      const t2 = document.createElement("span");
-      t2.className = "tag unread";
-      t2.style.cssText = "display:inline-block;margin-top:4px";
-      t2.textContent = "Nouvelle réponse";
-      st.append(document.createElement("br"), t2);
-      tr.style.cursor = "pointer";
-      tr.title = "Cliquez pour marquer les réponses comme lues";
-      tr.addEventListener("click", async () => {
-        await db.from("reponses").update({ lu_admin: true }).eq("feedback_id", f.id).eq("lu_admin", false);
-        await loadHistory();
-      });
-    }
-  });
-  stats.replies = newReplies;
-  setBadge($("bHistory"), newReplies);
-  renderOverview();
-  document.title = newReplies ? `(${newReplies}) Espace admin` : "Feedbacks";
+    t.textContent = f.lu ? "Lu par l'agent" : "Non lu par l'agent";
+    bar.appendChild(t);
+  }
+  if (unreadOf(f)) {
+    const mk = document.createElement("button");
+    mk.type = "button";
+    mk.textContent = "Marquer comme lu";
+    mk.addEventListener("click", () => markRead([f]));
+    bar.appendChild(mk);
+  }
+  if (fromAgent || reps.length) {
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "ghost";
+    open.textContent = "Répondre à l'agent";
+    const box = document.createElement("div");
+    box.className = "replybox";
+    box.hidden = true;
+    const ta = document.createElement("textarea");
+    ta.placeholder = "Votre réponse à " + agentName + "…";
+    const send = document.createElement("button");
+    send.type = "button";
+    send.textContent = "Envoyer";
+    const note = document.createElement("p");
+    note.className = "msg err";
+    box.append(ta, send, note);
+    open.addEventListener("click", () => { box.hidden = !box.hidden; if (!box.hidden) ta.focus(); });
+    send.addEventListener("click", async () => {
+      const message = ta.value.trim();
+      if (!message) return;
+      send.disabled = true;
+      const ag = agents.find(a => a.id === f.agent_id);
+      const { error } = await db.from("feedbacks").insert({ agent_id: f.agent_id, auteur_id: uid, message, modele: ag?.modele || f.modele || null });
+      if (error) { note.textContent = "Envoi impossible : " + error.message; send.disabled = false; return; }
+      await markRead([f]);
+    });
+    bar.appendChild(open);
+    card.append(bar, box);
+  } else {
+    card.appendChild(bar);
+  }
+  return card;
 }
+
+function renderThread(d, q, hit) {
+  const head = $("folderHead"), box = $("thread");
+  box.replaceChildren();
+  $("threadChips").hidden = !d;
+  if (!d) { head.className = "muted"; head.textContent = "Choisissez un agent dans le classeur."; return; }
+  document.querySelectorAll("#threadChips button").forEach(x => x.classList.toggle("active", x.dataset.v === view.v));
+
+  const un = d.items.reduce((n, f) => n + unreadOf(f), 0);
+  head.className = "";
+  head.replaceChildren();
+  const nm = document.createElement("strong");
+  nm.textContent = d.nom;
+  const cnt = document.createElement("span");
+  cnt.className = "muted";
+  cnt.textContent = `${d.items.length} message${d.items.length > 1 ? "s" : ""}${un ? " · " + un + " non lu" + (un > 1 ? "s" : "") : ""}`;
+  head.append(pstat(d.id), nm, cnt);
+  if (d.modele) { const m = document.createElement("span"); m.className = "tag model"; m.textContent = d.modele; head.appendChild(m); }
+  if (un) {
+    const all = document.createElement("button");
+    all.type = "button";
+    all.textContent = "Tout marquer comme lu";
+    all.addEventListener("click", () => markRead(d.items));
+    head.appendChild(all);
+  }
+
+  const nameHit = q && d.nom.toLowerCase().includes(q);
+  const items = d.items.filter(f =>
+    (view.v === "all" || (view.v === "unread" && unreadOf(f) > 0) || (view.v === "agent" && f.origine === "agent") || (view.v === "admin" && f.origine !== "agent")) &&
+    (!q || nameHit || hit(f)));
+  if (!items.length) { box.textContent = "Aucun message dans ce dossier."; return; }
+
+  let last = "";
+  items.forEach(f => {
+    const mk = new Date(f.created_at).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    if (mk !== last) {
+      const m = document.createElement("div");
+      m.className = "month";
+      m.textContent = mk;
+      box.appendChild(m);
+      last = mk;
+    }
+    box.appendChild(threadCard(f, d.nom));
+  });
+}
+
+$("folderSearch").addEventListener("input", e => { view.q = e.target.value; renderClasseur(); });
+document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener("click", () => { view.v = b.dataset.v; renderClasseur(); }));
 
 bindPreview($("adminImg"), $("adminPrev"));
 
@@ -895,7 +1063,41 @@ $("addForm").addEventListener("submit", async e => {
   await loadAccounts();
 });
 
-$("filter").addEventListener("change", loadHistory);
+
+/* ---------- Espace agent : envoyer un message à l'admin ---------- */
+let myModele = null;
+$("composeOpen").addEventListener("click", () => {
+  $("composeBox").hidden = !$("composeBox").hidden;
+  if (!$("composeBox").hidden) $("composeText").focus();
+});
+bindPreview($("composeImg"), $("composePrev"));
+$("composeSend").addEventListener("click", async () => {
+  const message = $("composeText").value.trim();
+  const file = $("composeImg").files[0];
+  const out = $("composeMsg");
+  out.className = "msg";
+  if (!message && !file) { out.className = "msg err"; out.textContent = "Écrivez un message ou ajoutez une image."; return; }
+  $("composeSend").disabled = true;
+  try {
+    const image_url = await uploadImage(file);
+    const { error } = await db.from("feedbacks").insert({
+      agent_id: uid, auteur_id: uid, message, image_url, modele: myModele,
+      origine: "agent", lu: true, lu_admin: false
+    });
+    if (error) throw new Error(error.message);
+  } catch (e) {
+    out.className = "msg err";
+    out.textContent = "Envoi impossible : " + e.message;
+    $("composeSend").disabled = false;
+    return;
+  }
+  $("composeSend").disabled = false;
+  $("composeText").value = "";
+  clearFile($("composeImg"), $("composePrev"));
+  out.className = "msg ok";
+  out.textContent = "Message envoyé à l'administrateur.";
+  await loadMine();
+});
 
 /* ---------- Espace agent ---------- */
 document.querySelectorAll("#chips button").forEach(b => b.addEventListener("click", () => {
@@ -941,7 +1143,8 @@ async function loadMine(auto = false) {
     }
     div.appendChild(meta);
 
-    div.appendChild(bubble("recv", "Reçu", f.message, f.image_url));
+    if (f.origine === "agent") div.appendChild(bubble("sent", "Vous · " + fmt(f.created_at), f.message, f.image_url));
+    else div.appendChild(bubble("recv", "Reçu", f.message, f.image_url));
     (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach(r => {
       div.appendChild(bubble("sent", "Votre réponse · " + fmt(r.created_at), r.message, r.image_url));
     });
