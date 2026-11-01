@@ -1,15 +1,71 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, screen, globalShortcut } = require("electron");
 const path = require("path");
 
 // Adresse du site : toute modification du site apparaît automatiquement dans l'exe
 const SITE_URL = "https://feedback-flame-eight.vercel.app/";
 const ORIGIN = new URL(SITE_URL).origin;
+// true = l'écran est assombri et bloqué derrière le pop-up ; false = le pop-up seul reste au premier plan
+const BLOCK_SCREEN = true;
 
 app.setAppUserModelId("com.agence.feedback");
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
 let win = null, tray = null, quitting = false, retry = null, lastLoad = 0;
+let popupWin = null, overlays = [];
+
+// Seules les pages de ton site peuvent envoyer des ordres à l'exe
+const fromSite = e => { try { return e.senderFrame.url.startsWith(ORIGIN); } catch { return false; } };
+
+/* ---------- Pop-up bloquant au centre de l'écran ---------- */
+function openPopup() {
+  if (popupWin) { popupWin.show(); popupWin.focus(); return; } // déjà ouvert : il se met à jour tout seul
+
+  if (BLOCK_SCREEN) {
+    const html = encodeURIComponent("<body style='margin:0;background:rgba(0,0,0,0.55)'></body>");
+    overlays = screen.getAllDisplays().map(d => {
+      const o = new BrowserWindow({
+        x: d.bounds.x, y: d.bounds.y, width: d.bounds.width, height: d.bounds.height,
+        frame: false, transparent: true, resizable: false, movable: false,
+        skipTaskbar: true, focusable: false, hasShadow: false, show: false,
+        webPreferences: { sandbox: true }
+      });
+      o.setAlwaysOnTop(true, "screen-saver");
+      o.loadURL("data:text/html;charset=utf-8," + html);
+      o.once("ready-to-show", () => o.showInactive());
+      return o;
+    });
+  }
+
+  popupWin = new BrowserWindow({
+    width: 520, height: 620, center: true, frame: false,
+    resizable: false, minimizable: false, maximizable: false,
+    alwaysOnTop: true, show: false, backgroundColor: "#ffffff",
+    icon: path.join(__dirname, "icon.png"),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: true, nodeIntegration: false, sandbox: true
+    }
+  });
+  popupWin.setAlwaysOnTop(true, "screen-saver"); // au-dessus de tout, même les applis plein écran
+  popupWin.loadURL(SITE_URL + "popup.html");
+  popupWin.once("ready-to-show", () => { popupWin.show(); popupWin.focus(); });
+  // Si la page du pop-up ne charge pas, on ne bloque jamais l'écran
+  popupWin.webContents.on("did-fail-load", (_e, code, _d, _u, isMainFrame) => {
+    if (isMainFrame && code !== -3) closePopup();
+  });
+  popupWin.webContents.on("will-navigate", e => e.preventDefault());
+  popupWin.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  popupWin.on("close", e => { if (popupWin) e.preventDefault(); }); // Alt+F4 ne le ferme pas
+}
+
+function closePopup() {
+  const p = popupWin;
+  popupWin = null;
+  if (p && !p.isDestroyed()) p.destroy();
+  overlays.forEach(o => { if (!o.isDestroyed()) o.destroy(); });
+  overlays = [];
+}
 
 function showWin() {
   if (!win) return;
@@ -86,12 +142,19 @@ app.whenReady().then(() => {
     { label: "Quitter", click: () => { quitting = true; app.quit(); } }
   ]));
   tray.on("click", showWin);
+  // Secours : Ctrl+Alt+Maj+Q libère l'écran si le pop-up reste bloqué
+  globalShortcut.register("CommandOrControl+Alt+Shift+Q", closePopup);
   // Démarre avec Windows, en arrière-plan
   app.setLoginItemSettings({ openAtLogin: true, args: ["--hidden"] });
 });
 
-ipcMain.on("show", showWin);
-ipcMain.on("unread", (_e, n) => {
+ipcMain.on("show", e => { if (fromSite(e)) showWin(); });
+ipcMain.on("popup", e => { if (fromSite(e)) openPopup(); });
+ipcMain.on("popup-done", e => { if (fromSite(e)) closePopup(); });
+ipcMain.on("unread", (e, n) => {
+  if (!fromSite(e)) return;
   if (tray) tray.setToolTip(n ? `Feedback Agence · ${n} non lu${n > 1 ? "s" : ""}` : "Feedback Agence");
   if (n && win && !win.isFocused()) win.flashFrame(true);
 });
+
+app.on("will-quit", () => globalShortcut.unregisterAll());
