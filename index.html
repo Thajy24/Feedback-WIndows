@@ -288,18 +288,11 @@ async function checkNotifs() {
       .eq("agent_id", uid).eq("lu", false).order("created_at", { ascending: true });
     if (error || !rows) return;
     window.native?.unread(rows.length);
-    if (!window.native) return; // notifications seulement dans l'exe
+    if (!window.native) return; // pop-up seulement dans l'exe
+    if (rows.length) window.native.popup?.(); // pop-up bloquant (ignoré s'il est déjà ouvert)
     let seen = [];
     try { seen = JSON.parse(localStorage.getItem("notifiedIds") || "[]"); } catch (e) {}
     const fresh = rows.filter(r => !seen.includes(r.id));
-    fresh.slice(0, 5).forEach(r => {
-      const n = new Notification("Nouveau feedback", { body: (r.message || "Image reçue").slice(0, 250) });
-      n.onclick = () => window.native.show();
-    });
-    if (fresh.length > 5) {
-      new Notification("Nouveaux feedbacks", { body: `+ ${fresh.length - 5} autres feedbacks à lire.` })
-        .onclick = () => window.native.show();
-    }
     localStorage.setItem("notifiedIds", JSON.stringify(rows.map(r => r.id)));
     if (fresh.length) await loadMine(true);
   } catch (e) { console.error(e); }
