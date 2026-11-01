@@ -2,53 +2,127 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src https://*.supabase.co data: blob:; style-src 'unsafe-inline'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nouveau feedback</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-  html, body { margin: 0; height: 100%; background: transparent; font: 15px system-ui, "Segoe UI", sans-serif; color: #1f2937; overflow: hidden; }
-  .dim { position: fixed; inset: 0; background: rgba(15, 23, 42, .6); display: grid; place-items: center; }
-  .nob .dim { background: #f8fafc; }
-  .card { width: min(480px, 92vw); max-height: 90vh; display: flex; flex-direction: column; background: #fff; border-radius: 12px; padding: 22px; box-shadow: 0 20px 60px rgba(0,0,0,.35); border-top: 5px solid #e11d48; }
-  .nob .card { box-shadow: none; width: 100%; height: 100%; max-height: none; border-radius: 0; box-sizing: border-box; }
-  h2 { margin: 0 0 2px; font-size: 18px; }
-  .meta { font-size: 12px; color: #6b7280; margin-bottom: 12px; }
-  .tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: #dbeafe; color: #1d4ed8; margin-left: 6px; }
-  #body { overflow-y: auto; margin-bottom: 16px; }
-  #text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.5; background: #e5e7eb; padding: 10px 14px; border-radius: 12px; border-bottom-left-radius: 3px; }
-  #img { display: block; max-width: 100%; max-height: 38vh; margin-top: 10px; border-radius: 8px; }
-  button { font: inherit; width: 100%; padding: 11px; border-radius: 8px; border: 0; cursor: pointer; margin-bottom: 8px; }
-  #ok, #send { background: #2563eb; color: #fff; font-weight: 600; }
-  #reply { background: #e5e7eb; color: #1f2937; }
-  textarea { width: 100%; box-sizing: border-box; min-height: 80px; padding: 10px; font: inherit; border: 1px solid #d1d5db; border-radius: 8px; margin-bottom: 8px; resize: none; }
-  #file { width: 100%; box-sizing: border-box; margin-bottom: 8px; font: inherit; font-size: 13px; }
-  #prev { max-width: 120px; max-height: 80px; border-radius: 6px; margin-bottom: 8px; display: block; }
-  #err { font-size: 12px; color: #dc2626; min-height: 14px; }
-  #count { font-size: 12px; color: #6b7280; text-align: center; margin-top: 2px; }
-  :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-  [hidden] { display: none !important; }
+  :root { --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --accent:#2563eb; --alert:#e11d48; --recv:#e5e7eb; }
+  * { box-sizing:border-box; }
+  html, body { height:100%; margin:0; }
+  body { font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; color:var(--ink); background:#fff; display:flex; flex-direction:column; user-select:none; }
+  header { background:var(--alert); color:#fff; padding:14px 20px; }
+  header b { font-size:17px; }
+  header span { display:block; font-size:12px; opacity:.9; }
+  main { flex:1; overflow-y:auto; padding:16px 20px; user-select:text; }
+  .meta { font-size:12px; color:var(--muted); margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:99px; background:#dbeafe; color:#1d4ed8; }
+  .bubble { background:var(--recv); border-radius:12px; border-bottom-left-radius:3px; padding:10px 14px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .bubble img { display:block; max-width:100%; max-height:240px; margin-top:8px; border-radius:8px; }
+  footer { padding:12px 20px 16px; border-top:1px solid var(--line); }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:4px; }
+  textarea { width:100%; min-height:80px; resize:none; font:inherit; padding:9px 10px; border:1px solid var(--line); border-radius:6px; user-select:text; }
+  textarea:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+  button { width:100%; margin-top:10px; padding:11px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:6px; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:default; }
+  .err { color:var(--alert); font-size:13px; min-height:18px; margin:6px 0 0; }
+  [hidden] { display:none !important; }
 </style>
 </head>
 <body>
-  <div class="dim">
-    <div class="card" id="card" role="alertdialog" aria-labelledby="title">
-      <h2 id="title">Nouveau feedback</h2>
-      <div class="meta"><span id="date"></span><span id="modele" class="tag" hidden></span></div>
-      <div id="body">
-        <div id="text"></div>
-        <img id="img" alt="Image jointe" hidden>
-      </div>
-      <button id="ok">Oui, j'ai lu</button>
-      <button id="reply">Répondre</button>
-      <div id="replyBox" hidden>
-        <textarea id="ta" placeholder="Votre réponse..."></textarea>
-        <input id="file" type="file" accept="image/*" aria-label="Joindre une image">
-        <img id="prev" alt="Aperçu" hidden>
-        <button id="send">Envoyer la réponse</button>
-        <div id="err"></div>
-      </div>
-      <div id="count"></div>
-    </div>
-  </div>
-  <script src="popup.js"></script>
+  <header>
+    <b>Nouveau feedback</b>
+    <span id="counter">Chargement…</span>
+  </header>
+  <main>
+    <div class="meta"><span id="date"></span><span id="model" class="tag" hidden></span></div>
+    <div id="bubble" class="bubble"></div>
+  </main>
+  <footer>
+    <label for="reply">Votre réponse (facultatif)</label>
+    <textarea id="reply" placeholder="Écrivez ici pour répondre…"></textarea>
+    <p id="err" class="err" role="alert"></p>
+    <button id="go" type="button" disabled>J'ai lu</button>
+  </footer>
+
+<script>
+const db = supabase.createClient("https://mzjiyusbgtslfzchoykf.supabase.co", "sb_publishable_6JGumr_7n73O3U6MjRdgkw_5mZH46cc");
+const $ = id => document.getElementById(id);
+let uid = null, queue = [], timer = null;
+
+function finish() {
+  clearInterval(timer);
+  $("go").disabled = true;
+  $("counter").textContent = "Terminé";
+  if (window.native) window.native.popupDone(); // ferme le pop-up et libère l'écran
+  else $("bubble").textContent = "Tous les feedbacks sont lus. Vous pouvez fermer cet onglet.";
+}
+
+async function fetchUnread() {
+  const { data, error } = await db.from("feedbacks").select("id,message,image_url,created_at,modele")
+    .eq("agent_id", uid).eq("lu", false).order("created_at", { ascending: true });
+  return error ? null : data;
+}
+
+function render() {
+  const f = queue[0];
+  $("counter").textContent = queue.length > 1 ? `${queue.length} feedbacks à lire` : "1 feedback à lire";
+  $("date").textContent = new Date(f.created_at).toLocaleString("fr-FR");
+  $("model").hidden = !f.modele;
+  $("model").textContent = f.modele ? "Modèle : " + f.modele : "";
+  const b = $("bubble");
+  b.replaceChildren();
+  if (f.message) b.append(document.createTextNode(f.message));
+  if (f.image_url) {
+    const img = document.createElement("img");
+    img.src = f.image_url; img.alt = "Image jointe";
+    b.appendChild(img);
+  }
+  $("reply").value = "";
+  updateBtn();
+  $("go").disabled = false;
+  $("reply").focus();
+}
+function updateBtn() { $("go").textContent = $("reply").value.trim() ? "Envoyer la réponse et continuer" : "J'ai lu"; }
+$("reply").addEventListener("input", updateBtn);
+
+async function refresh() {
+  const rows = await fetchUnread();
+  if (!rows) return; // erreur réseau : on garde l'affichage actuel
+  const prev = queue[0]?.id;
+  queue = rows;
+  if (!queue.length) return finish();
+  if (queue[0].id !== prev) render();
+  else $("counter").textContent = queue.length > 1 ? `${queue.length} feedbacks à lire` : "1 feedback à lire";
+}
+
+$("go").addEventListener("click", async () => {
+  const f = queue[0];
+  if (!f) return;
+  const text = $("reply").value.trim();
+  $("go").disabled = true;
+  $("err").textContent = "";
+  try {
+    if (text) {
+      const { error } = await db.from("reponses").insert({ feedback_id: f.id, auteur_id: uid, message: text });
+      if (error) throw new Error(error.message);
+    }
+    const { data, error } = await db.from("feedbacks").update({ lu: true }).eq("id", f.id).select("id");
+    if (error || !data || !data.length) throw new Error(error ? error.message : "droits manquants");
+  } catch (e) {
+    $("err").textContent = "Envoi impossible : " + e.message;
+    $("go").disabled = false;
+    return;
+  }
+  await refresh();
+});
+
+(async () => {
+  const { data: { session } } = await db.auth.getSession();
+  if (!session) return finish(); // pas connecté : rien à bloquer
+  uid = session.user.id;
+  await refresh();
+  timer = setInterval(refresh, 10000); // les nouveaux feedbacks s'ajoutent à la file
+})();
+</script>
 </body>
 </html>
