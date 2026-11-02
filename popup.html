@@ -25,6 +25,7 @@
   button { width:100%; margin-top:10px; padding:11px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:6px; cursor:pointer; }
   button:disabled { opacity:.6; cursor:default; }
   .err { color:var(--alert); font-size:13px; min-height:18px; margin:6px 0 0; }
+  .ctx { font-size:12px; color:var(--muted); border-left:3px solid var(--line); padding:2px 8px; margin-bottom:8px; overflow-wrap:anywhere; }
   [hidden] { display:none !important; }
 
   /* Alerte visuelle : l'en-tête pulse et la cloche se balance */
@@ -37,11 +38,12 @@
 </head>
 <body>
   <header>
-    <b>Nouveau feedback</b>
+    <b id="title">Nouveau feedback</b>
     <span id="counter">Chargement…</span>
   </header>
   <main>
     <div class="meta"><span id="date"></span><span id="model" class="tag" hidden></span></div>
+    <div id="ctx" class="ctx" hidden></div>
     <div id="bubble" class="bubble"></div>
   </main>
   <footer>
@@ -66,14 +68,26 @@ function finish() {
 }
 
 async function fetchUnread() {
-  const { data, error } = await db.from("feedbacks").select("id,message,image_url,created_at,modele")
-    .eq("agent_id", uid).eq("lu", false).order("created_at", { ascending: true });
-  return error ? null : data;
+  const [fb, rp] = await Promise.all([
+    db.from("feedbacks").select("id,message,image_url,created_at,modele").eq("agent_id", uid).eq("lu", false),
+    db.from("reponses").select("id,message,image_url,created_at,feedback_id,feedbacks!inner(agent_id,message)").eq("lu_agent", false).eq("feedbacks.agent_id", uid)
+  ]);
+  if (fb.error) return null;
+  // deux sortes d'éléments : un nouveau feedback, ou une réponse de l'administrateur dans un feedback
+  const items = fb.data.map(f => ({ ...f, kind: "fb", key: "f" + f.id, fid: f.id }));
+  if (!rp.error) rp.data.forEach(r => items.push({
+    id: r.id, kind: "rp", key: "r" + r.id, fid: r.feedback_id,
+    message: r.message, image_url: r.image_url, created_at: r.created_at, ctx: r.feedbacks?.message || ""
+  }));
+  return items.sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 function render() {
   const f = queue[0];
-  $("counter").textContent = queue.length > 1 ? `${queue.length} feedbacks à lire` : "1 feedback à lire";
+  $("counter").textContent = queue.length > 1 ? `${queue.length} messages à lire` : "1 message à lire";
+  $("title").textContent = f.kind === "rp" ? "Nouvelle réponse de l'administrateur" : "Nouveau feedback";
+  $("ctx").hidden = f.kind !== "rp" || !f.ctx;
+  $("ctx").textContent = f.kind === "rp" && f.ctx ? "En réponse à : " + f.ctx.slice(0, 160) : "";
   $("date").textContent = new Date(f.created_at).toLocaleString("fr-FR");
   $("model").hidden = !f.modele;
   $("model").textContent = f.modele ? "Modèle : " + f.modele : "";
@@ -159,13 +173,13 @@ const seen = new Set(); // feedbacks déjà annoncés par la cloche
 async function refresh() {
   const rows = await fetchUnread();
   if (!rows) return; // erreur réseau : on garde l'affichage actuel
-  const prev = queue[0]?.id;
+  const prev = queue[0]?.key;
   queue = rows;
   if (!queue.length) return finish();
-  if (queue.some(f => !seen.has(f.id))) { playBell(); startReminder(); } // sonnerie à l'ouverture et à chaque nouveau feedback
-  queue.forEach(f => seen.add(f.id));
-  if (queue[0].id !== prev) render();
-  else $("counter").textContent = queue.length > 1 ? `${queue.length} feedbacks à lire` : "1 feedback à lire";
+  if (queue.some(f => !seen.has(f.key))) { playBell(); startReminder(); } // sonnerie à l'ouverture et à chaque nouveau feedback
+  queue.forEach(f => seen.add(f.key));
+  if (queue[0].key !== prev) render();
+  else $("counter").textContent = queue.length > 1 ? `${queue.length} messages à lire` : "1 message à lire";
 }
 
 $("go").addEventListener("click", async () => {
@@ -176,10 +190,12 @@ $("go").addEventListener("click", async () => {
   $("err").textContent = "";
   try {
     if (text) {
-      const { error } = await db.from("reponses").insert({ feedback_id: f.id, auteur_id: uid, message: text });
+      const { error } = await db.from("reponses").insert({ feedback_id: f.fid, auteur_id: uid, message: text, lu_admin: false, lu_agent: true });
       if (error) throw new Error(error.message);
     }
-    const { data, error } = await db.from("feedbacks").update({ lu: true }).eq("id", f.id).select("id");
+    const { data, error } = f.kind === "rp"
+      ? await db.from("reponses").update({ lu_agent: true }).eq("id", f.id).select("id")
+      : await db.from("feedbacks").update({ lu: true }).eq("id", f.id).select("id");
     if (error || !data || !data.length) throw new Error(error ? error.message : "droits manquants");
   } catch (e) {
     $("err").textContent = "Envoi impossible : " + e.message;
