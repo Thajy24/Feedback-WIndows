@@ -85,31 +85,51 @@ function render() {
 function updateBtn() { $("go").textContent = $("reply").value.trim() ? "Envoyer la réponse et continuer" : "J'ai lu"; }
 $("reply").addEventListener("input", updateBtn);
 
-/* ---------- Son de cloche (généré par le navigateur, aucun fichier à ajouter) ---------- */
+/* ---------- Sonnette de comptoir (générée par le navigateur, aucun fichier à ajouter) ---------- */
 const BELL_VOLUME = 0.5; // 0 = muet, 1 = fort
 let audioCtx = null;
-function strike(t0, base) {
-  // une cloche = plusieurs notes superposées qui s'éteignent chacune à leur rythme
-  [[1, 1, 2.2], [2.76, 0.6, 1.6], [5.4, 0.35, 1.0], [8.93, 0.2, 0.6]].forEach(([ratio, amp, decay]) => {
+
+function ding(t0, gain) {
+  const out = audioCtx.createGain();
+  out.gain.value = 0.25 * BELL_VOLUME * gain;
+  out.connect(audioCtx.destination);
+
+  // le petit « clac » métallique du marteau
+  const len = Math.floor(audioCtx.sampleRate * 0.025);
+  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+  const click = audioCtx.createBufferSource();
+  click.buffer = buf;
+  const hp = audioCtx.createBiquadFilter();
+  hp.type = "highpass";
+  hp.frequency.value = 3500;
+  click.connect(hp).connect(out);
+  click.start(t0);
+
+  // la cloche : notes très aiguës qui s'éteignent à des rythmes différents
+  const base = 2650; // plus haut = plus « sonnette », plus bas = plus « cloche »
+  [[1, 1, 1.5], [1.006, 0.8, 1.5], [2.32, 0.5, 1.0], [4.25, 0.3, 0.6], [6.63, 0.18, 0.35]].forEach(([ratio, amp, decay]) => {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
     o.type = "sine";
     o.frequency.value = base * ratio;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.35 * BELL_VOLUME * amp, t0 + 0.01);
+    g.gain.exponentialRampToValueAtTime(amp, t0 + 0.003);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
-    o.connect(g).connect(audioCtx.destination);
+    o.connect(g).connect(out);
     o.start(t0);
     o.stop(t0 + decay + 0.05);
   });
 }
+
 function playBell() {
   if (!BELL_VOLUME) return;
   try {
     audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
     audioCtx.resume().then(() => {
       const t = audioCtx.currentTime + 0.05;
-      strike(t, 880);        // ding
-      strike(t + 0.55, 1174); // ding (plus aigu)
+      ding(t, 1);        // ting
+      ding(t + 0.2, 0.9); // ting (deuxième coup rapide)
     }).catch(() => {});
   } catch (e) {}
 }
