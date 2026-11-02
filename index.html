@@ -25,7 +25,7 @@
   .muted { color:var(--muted); }
   .msg { min-height:20px; font-size:13px; margin:0; }
   .err { color:var(--alert); } .ok { color:var(--ok); }
-  #login { max-width:360px; margin:12vh auto 0; }
+  #login, #forgot, #reset { max-width:360px; margin:12vh auto 0; }
   .tablewrap { overflow-x:auto; }
   table { width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line); }
   th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top; }
@@ -137,6 +137,30 @@
     <button id="loginBtn" type="submit">Se connecter</button>
     <p id="loginErr" class="msg err" role="alert"></p>
     <button type="button" id="modeBtn" class="ghost">Pas de compte ? Créer un compte</button>
+    <button type="button" id="forgotBtn" class="ghost" style="display:block;margin-top:8px">Mot de passe oublié ?</button>
+  </form>
+
+  <!-- MOT DE PASSE OUBLIÉ : demande envoyée à l'administrateur -->
+  <form id="forgot" class="card" hidden>
+    <h1>Mot de passe oublié</h1>
+    <p class="muted" style="margin:0 0 16px">Saisissez l'email de votre compte. Votre demande sera transmise à l'administrateur ; après sa validation, vous recevrez un email avec un lien pour choisir un nouveau mot de passe.</p>
+    <label for="forgotEmail">Email</label>
+    <input id="forgotEmail" type="email" autocomplete="username" required>
+    <button id="forgotSend" type="submit">Envoyer la demande</button>
+    <p id="forgotMsg" class="msg" role="status"></p>
+    <button type="button" id="forgotBack" class="ghost">← Retour à la connexion</button>
+  </form>
+
+  <!-- NOUVEAU MOT DE PASSE (après clic sur le lien reçu par email) -->
+  <form id="reset" class="card" hidden>
+    <h1>Nouveau mot de passe</h1>
+    <p class="muted" style="margin:0 0 16px">Choisissez votre nouveau mot de passe.</p>
+    <label for="newPw">Nouveau mot de passe (6 caractères minimum)</label>
+    <input id="newPw" type="password" minlength="6" autocomplete="new-password" required>
+    <label for="newPw2">Confirmer le mot de passe</label>
+    <input id="newPw2" type="password" minlength="6" autocomplete="new-password" required>
+    <button id="resetBtn" type="submit">Enregistrer</button>
+    <p id="resetMsg" class="msg err" role="alert"></p>
   </form>
 
   <!-- ESPACE ADMIN -->
@@ -152,6 +176,7 @@
       <button type="button" role="tab" data-tab="history">Classeur<span id="bHistory" class="badge"></span></button>
       <button type="button" role="tab" data-tab="agents">Agents</button>
       <button type="button" role="tab" data-tab="accounts">Inscriptions<span id="bAccounts" class="badge"></span></button>
+      <button type="button" role="tab" data-tab="pwd">Mots de passe<span id="bPwd" class="badge"></span></button>
     </nav>
 
     <!-- Vue d'ensemble -->
@@ -161,6 +186,7 @@
         <div class="stat"><b id="stAgents">0</b><span>Agents actifs</span></div>
         <div class="stat"><b id="stPending">0</b><span>Inscriptions en attente</span></div>
         <div class="stat"><b id="stReplies">0</b><span>Messages non lus</span></div>
+        <div class="stat"><b id="stPwd">0</b><span>Demandes de mot de passe</span></div>
       </div>
       <h2>Connectés maintenant</h2>
       <div id="onlineList" class="card"></div>
@@ -241,14 +267,29 @@
         <div id="accounts" class="account-grid"></div>
       </div>
     </div>
+
+    <!-- Demandes de changement de mot de passe -->
+    <div class="panel" data-panel="pwd" hidden>
+      <h2 style="margin-top:0">Demandes de mot de passe</h2>
+      <div class="card">
+        <p class="admin-note">
+          Aucun mot de passe ne peut être changé sans votre validation. En approuvant, un email avec un lien à usage unique est envoyé à l'utilisateur.
+        </p>
+        <div id="pwdList" class="account-grid"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ESPACE AGENT -->
   <section id="agent" hidden>
     <div class="top">
       <div><h1>Mon espace</h1><span id="agentWho" class="muted"></span> <span class="pstat on" id="myStatus" hidden>Actif</span></div>
-      <button class="ghost logout">Se déconnecter</button>
+      <div style="text-align:right">
+        <button class="ghost logout">Se déconnecter</button>
+        <div id="pwdChange" hidden style="margin-top:6px"><button type="button" id="pwdChangeBtn" class="ghost">🔑 Changer mon mot de passe</button></div>
+      </div>
     </div>
+    <p id="agentPwdMsg" class="msg" role="status"></p>
     <nav class="tabs agenttabs" id="agentTabs" hidden aria-label="Sections">
       <button type="button" data-atab="fb">Feedbacks<span id="bFb" class="badge"></span></button>
       <button type="button" data-atab="chat">Discussion<span id="bChat" class="badge"></span></button>
@@ -291,9 +332,10 @@ const MAX_IMG = 5 * 1024 * 1024; // 5 Mo
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = id => document.getElementById(id);
 let uid = null, agents = [], timer = null, mineFilter = "all", tab = "overview";
+let recovery = /type=recovery/.test(location.hash); // arrivée via le lien « nouveau mot de passe »
 
 function show(name) {
-  ["login", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
+  ["login", "forgot", "reset", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
 }
 function option(value, text) {
   const o = document.createElement("option");
@@ -307,6 +349,56 @@ function group(label, opts) {
   return g;
 }
 const fmt = d => new Date(d).toLocaleString("fr-FR");
+const resetUrl = () => location.href.split(/[?#]/)[0]; // adresse de cette page (à autoriser dans Supabase)
+
+/* ---------- Vérification des adresses email : une vraie adresse, pas n'importe laquelle ---------- */
+const DISPOSABLE = new Set(("mailinator.com guerrillamail.com guerrillamail.net guerrillamail.org guerrillamailblock.com sharklasers.com grr.la " +
+  "10minutemail.com 10minutemail.net tempmail.com temp-mail.org temp-mail.io tempmail.net tempr.email tempail.com throwawaymail.com " +
+  "yopmail.com yopmail.fr yopmail.net getnada.com nada.email trashmail.com trashmail.net trashmail.de maildrop.cc dispostable.com " +
+  "fakeinbox.com fakemail.net emailfake.com mailnesia.com mintemail.com mohmal.com emailondeck.com spamgourmet.com mytemp.email " +
+  "burnermail.io discard.email discardmail.com mailcatch.com moakt.com mail.tm 1secmail.com 1secmail.net 1secmail.org spam4.me " +
+  "tmail.ws tmpmail.org tmpmail.net mailtemp.net inboxkitten.com example.com example.org example.net test.com").split(" "));
+const TYPOS = {
+  "gmial.com":"gmail.com", "gmai.com":"gmail.com", "gamil.com":"gmail.com", "gmail.co":"gmail.com", "gmail.con":"gmail.com", "gmail.cm":"gmail.com", "gmail.fr":"gmail.com",
+  "hotmial.com":"hotmail.com", "hotmail.co":"hotmail.com", "hotmai.com":"hotmail.com", "outlok.com":"outlook.com", "outllok.com":"outlook.com",
+  "yaho.com":"yahoo.com", "yahou.com":"yahoo.com", "yahoo.co":"yahoo.com", "yahooo.com":"yahoo.com", "iclod.com":"icloud.com", "icloud.co":"icloud.com"
+};
+const EMAIL_RE = /^[a-z0-9](?:[a-z0-9._%+-]{0,62}[a-z0-9])?@(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,24}$/i;
+const FAKE_LOCAL = /^(test|tests|testing|fake|faux|example|exemple|nomail|noreply|no-reply|abc|abcd|azerty|qwerty|xxx+|aaa+|asdf|asd|zzz+)\d*$/i;
+
+async function dnsHas(domain, type) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 4000);
+  try {
+    const r = await fetch(`https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=${type}`, { signal: ctl.signal, headers: { accept: "application/dns-json" } });
+    const j = await r.json();
+    if (j.Status === 3) return "none";                           // domaine inexistant
+    const ans = (j.Answer || []).filter(a => a.type === (type === "MX" ? 15 : 1));
+    if (type === "MX" && ans.length && ans.every(a => /^0\s+\.?$/.test(String(a.data).trim()))) return "none"; // « null MX » : n'accepte aucun email
+    return ans.length ? "yes" : "empty";
+  } catch (e) { return "unknown"; }                               // réseau bloqué : on ne bloque pas l'utilisateur
+  finally { clearTimeout(t); }
+}
+
+// Renvoie "" si l'adresse est acceptable, sinon le message d'erreur à afficher
+async function checkEmail(raw) {
+  const email = (raw || "").trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email.includes("..")) return "Veuillez saisir une adresse email valide.";
+  const [local, domain] = email.split("@");
+  if (FAKE_LOCAL.test(local)) return "Cette adresse ne semble pas réelle. Utilisez votre vraie adresse email personnelle.";
+  const parts = domain.split(".");
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (DISPOSABLE.has(parts.slice(i).join("."))) return "Les adresses jetables ou temporaires ne sont pas acceptées.";
+  }
+  if (TYPOS[domain]) return `Le domaine « ${domain} » semble être une faute de frappe. Vouliez-vous dire « ${TYPOS[domain]} » ?`;
+  const mx = await dnsHas(domain, "MX");
+  if (mx === "none") return "Ce domaine n'existe pas ou ne peut pas recevoir d'emails.";
+  if (mx === "empty") {
+    const a = await dnsHas(domain, "A");
+    if (a === "none" || a === "empty") return "Ce domaine ne peut pas recevoir d'emails.";
+  }
+  return "";
+}
 
 /* ---------- Statut « actif » (Supabase Realtime Presence) ---------- */
 let channel = null, online = new Map(); // id utilisateur -> infos de présence
@@ -452,8 +544,12 @@ function setTab(name) {
 }
 document.querySelectorAll("#admin .tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
-let stats = { pending: 0, replies: 0 };
+let stats = { pending: 0, replies: 0, pwd: 0 };
 function setBadge(el, n) { el.textContent = n > 0 ? String(n) : ""; }
+function updateTitle() {
+  const total = stats.replies + stats.pwd;
+  document.title = total ? `(${total}) Espace admin` : "Feedbacks";
+}
 function renderOverview() {
   if ($("admin").hidden) return;
   const onlineAgents = [...online.entries()].filter(([, v]) => v.role === "agent");
@@ -461,6 +557,7 @@ function renderOverview() {
   $("stAgents").textContent = agents.length;
   $("stPending").textContent = stats.pending;
   $("stReplies").textContent = stats.replies;
+  $("stPwd").textContent = stats.pwd;
 
   const box = $("onlineList");
   box.replaceChildren();
@@ -492,8 +589,19 @@ function renderOverview() {
 async function route() {
   clearInterval(timer);
   document.title = "Feedbacks";
+  if (recovery) { show("reset"); return; } // lien « nouveau mot de passe » ouvert : formulaire dédié
+
   const { data: { session } } = await db.auth.getSession();
-  if (!session) { await stopPresence(); window.native?.unread(0); return show("login"); }
+  if (!session) {
+    await stopPresence(); window.native?.unread(0);
+    show("login");
+    if (/error_code=|error=access_denied/.test(location.hash)) {
+      $("loginErr").className = "msg err";
+      $("loginErr").textContent = "Ce lien est invalide ou a expiré. Refaites une demande avec « Mot de passe oublié ».";
+      history.replaceState(null, "", resetUrl());
+    }
+    return;
+  }
 
   const { data: p } = await db.from("profiles").select("nom,email,role,actif,modele,email_confirme").eq("id", session.user.id).single();
   if (!p) {
@@ -508,6 +616,8 @@ async function route() {
   myModele = p.modele || null;
   $("composeWrap").hidden = true;
   $("agentTabs").hidden = true;
+  $("pwdChange").hidden = true;
+  $("agentPwdMsg").textContent = "";
   $("apChat").hidden = true;
   $("apFb").hidden = false;
   const who = p.nom + (p.modele ? " · Modèle : " + p.modele : "");
@@ -517,12 +627,14 @@ async function route() {
     $("adminWho").textContent = p.nom;
     show("admin");
     setTab(tab);
+    if (window.Notification && Notification.permission === "default") { try { Notification.requestPermission(); } catch (e) {} }
     await loadAgents();
     await loadPending();
     await loadAccounts();
     await loadHistory();
+    await loadPwd();
     renderOverview();
-    timer = setInterval(() => { loadHistory(true); loadPending(); loadAccounts(); }, 30000);
+    timer = setInterval(() => { loadHistory(true); loadPending(); loadAccounts(); loadPwd(); }, 30000);
   } else if (!p.email_confirme) {
     $("agentWho").textContent = who;
     $("chips").hidden = true;
@@ -541,6 +653,7 @@ async function route() {
     show("agent");
     $("composeWrap").hidden = false;
     $("agentTabs").hidden = false;
+    $("pwdChange").hidden = false;
     buildChatCompose();
     setATab(atab);
     await loadMine();
@@ -557,6 +670,7 @@ function setMode(on) {
   $("loginTitle").textContent = on ? "Créer un compte" : "Connexion";
   $("loginBtn").textContent = on ? "Créer mon compte" : "Se connecter";
   $("modeBtn").textContent = on ? "Déjà un compte ? Se connecter" : "Pas de compte ? Créer un compte";
+  $("forgotBtn").hidden = on;
   $("password").autocomplete = on ? "new-password" : "current-password";
   $("loginErr").textContent = "";
 }
@@ -568,15 +682,16 @@ $("login").addEventListener("submit", async e => {
   err.className = "msg err";
   err.textContent = "";
   $("loginBtn").disabled = true;
-  const email = $("email").value.trim(), password = $("password").value;
+  const email = $("email").value.trim().toLowerCase(), password = $("password").value;
 
   if (signup) {
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      err.textContent = "Veuillez utiliser une vraie adresse email valide.";
+    const bad = await checkEmail(email);
+    if (bad) {
+      err.textContent = bad;
       $("loginBtn").disabled = false;
       return;
     }
-    const r = await db.auth.signUp({ email, password, options: { data: { nom: $("nom").value.trim() } } });
+    const r = await db.auth.signUp({ email, password, options: { data: { nom: $("nom").value.trim() }, emailRedirectTo: resetUrl() } });
     $("loginBtn").disabled = false;
     if (r.error) {
       err.textContent = /registered|already/i.test(r.error.message)
@@ -599,6 +714,61 @@ $("login").addEventListener("submit", async e => {
   await route();
 });
 
+/* ---------- Mot de passe oublié : la demande part chez l'administrateur ---------- */
+$("forgotBtn").addEventListener("click", () => {
+  $("forgotEmail").value = $("email").value;
+  $("forgotMsg").textContent = "";
+  show("forgot");
+});
+$("forgotBack").addEventListener("click", () => show("login"));
+$("forgot").addEventListener("submit", async e => {
+  e.preventDefault();
+  const out = $("forgotMsg");
+  out.className = "msg err";
+  out.textContent = "";
+  const email = $("forgotEmail").value.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) { out.textContent = "Veuillez saisir une adresse email valide."; return; }
+  $("forgotSend").disabled = true;
+  const { error } = await db.rpc("request_password_reset", { p_email: email });
+  $("forgotSend").disabled = false;
+  if (error) { out.textContent = "Envoi impossible : " + error.message + " (le script SQL a-t-il été exécuté ?)"; return; }
+  // Même réponse que le compte existe ou non (on ne révèle pas quels emails sont inscrits)
+  out.className = "msg ok";
+  out.textContent = "Si un compte correspond à cette adresse, votre demande a été transmise à l'administrateur. Vous recevrez un email dès qu'elle sera validée.";
+});
+
+/* ---------- Nouveau mot de passe (lien reçu par email après validation) ---------- */
+db.auth.onAuthStateChange(ev => {
+  if (ev === "PASSWORD_RECOVERY") { recovery = true; clearInterval(timer); show("reset"); }
+});
+$("reset").addEventListener("submit", async e => {
+  e.preventDefault();
+  const out = $("resetMsg");
+  out.className = "msg err";
+  out.textContent = "";
+  const a = $("newPw").value, b = $("newPw2").value;
+  if (a.length < 6) { out.textContent = "6 caractères minimum."; return; }
+  if (a !== b) { out.textContent = "Les deux mots de passe ne correspondent pas."; return; }
+  $("resetBtn").disabled = true;
+  const { error } = await db.auth.updateUser({ password: a });
+  $("resetBtn").disabled = false;
+  if (error) {
+    out.textContent = /approv|database error|not allowed/i.test(error.message)
+      ? "Ce changement n'a pas été validé par l'administrateur, ou le lien a déjà servi. Faites une nouvelle demande."
+      : "Changement impossible : " + error.message;
+    return;
+  }
+  recovery = false;
+  $("newPw").value = ""; $("newPw2").value = "";
+  history.replaceState(null, "", resetUrl());
+  await stopPresence();
+  await db.auth.signOut();
+  setMode(false);
+  show("login");
+  $("loginErr").className = "msg ok";
+  $("loginErr").textContent = "Mot de passe modifié. Connectez-vous avec le nouveau.";
+});
+
 document.querySelectorAll(".logout").forEach(b => b.addEventListener("click", async () => {
   clearInterval(timer);
   await stopPresence(); // l'utilisateur passe « Hors ligne » immédiatement
@@ -608,11 +778,22 @@ document.querySelectorAll(".logout").forEach(b => b.addEventListener("click", as
   $("chatCompose").replaceChildren();
   $("chatList").replaceChildren();
   atab = "fb";
+  pwdKnown = null;
   await db.auth.signOut();
   tab = "overview";
   show("login");
   document.title = "Feedbacks";
 }));
+
+/* ---------- Espace agent : demander un changement de mot de passe ---------- */
+$("pwdChangeBtn").addEventListener("click", async () => {
+  const out = $("agentPwdMsg");
+  if (!confirm("Envoyer une demande de changement de mot de passe à l'administrateur ?")) return;
+  const { data: { session } } = await db.auth.getSession();
+  const { error } = await db.rpc("request_password_reset", { p_email: session.user.email });
+  out.className = error ? "msg err" : "msg ok";
+  out.textContent = error ? "Envoi impossible : " + error.message : "Demande envoyée. Vous recevrez un email dès que l'administrateur l'aura validée.";
+});
 
 /* ---------- Espace admin ---------- */
 async function loadAgents() {
@@ -748,6 +929,111 @@ async function loadAccounts() {
     });
 
     actions.append(role, toggle, del);
+    row.append(info, actions);
+    box.appendChild(row);
+  });
+}
+
+/* ---------- Demandes de mot de passe (validation par l'admin) ---------- */
+let pwdKnown = null; // ids des demandes déjà vues, pour notifier les nouvelles
+function notifyPwd(fresh) {
+  const who = fresh.map(r => r.nom || r.email).join(", ");
+  try {
+    if (window.Notification && Notification.permission === "granted") {
+      const n = new Notification("Demande de changement de mot de passe", { body: who });
+      n.onclick = () => { window.focus(); setTab("pwd"); };
+    }
+  } catch (e) {}
+}
+async function sendResetLink(email) {
+  return db.auth.resetPasswordForEmail(email, { redirectTo: resetUrl() });
+}
+async function loadPwd() {
+  const box = $("pwdList");
+  const { data, error } = await db.rpc("admin_list_password_requests");
+  if (error) { box.textContent = "Impossible de charger les demandes : " + error.message + " (le script SQL a-t-il été exécuté ?)"; return; }
+  const rows = data || [];
+  const pend = rows.filter(r => r.status === "pending");
+  stats.pwd = pend.length;
+  setBadge($("bPwd"), pend.length);
+  updateTitle();
+  renderOverview();
+  if (pwdKnown) {
+    const fresh = pend.filter(r => !pwdKnown.has(r.id));
+    if (fresh.length) notifyPwd(fresh);
+  }
+  pwdKnown = new Set(pend.map(r => r.id));
+
+  box.replaceChildren();
+  if (!rows.length) { box.textContent = "Aucune demande en cours."; return; }
+  rows.forEach(r => {
+    const row = document.createElement("div");
+    row.className = "account-row";
+    const info = document.createElement("div");
+    info.className = "account-info";
+    const name = document.createElement("strong");
+    name.textContent = r.nom || "Sans nom";
+    const mail = document.createElement("span");
+    mail.className = "muted";
+    mail.textContent = r.email;
+    const when = document.createElement("span");
+    when.className = "muted";
+    when.style.fontSize = "13px";
+    when.textContent = fmt(r.created_at);
+    const tag = document.createElement("span");
+    tag.className = "tag " + (r.status === "pending" ? "unread" : "read");
+    tag.textContent = r.status === "pending" ? "En attente de validation" : "Validée · lien envoyé";
+    info.append(name, mail, when, tag);
+
+    const actions = document.createElement("div");
+    actions.className = "account-actions";
+    if (r.status === "pending") {
+      const ok = document.createElement("button");
+      ok.type = "button";
+      ok.textContent = "Approuver";
+      ok.style.background = "var(--ok)";
+      ok.addEventListener("click", async () => {
+        if (!confirm(`Autoriser ${r.nom || r.email} à changer son mot de passe ?\nUn email avec un lien lui sera envoyé.`)) return;
+        ok.disabled = true;
+        const { error: e1 } = await db.rpc("admin_resolve_password_request", { req_id: r.id, approve: true });
+        if (e1) { alert("Validation impossible : " + e1.message); ok.disabled = false; return; }
+        const { error: e2 } = await sendResetLink(r.email);
+        if (e2) alert("Demande validée, mais l'email n'a pas pu être envoyé : " + e2.message + "\nUtilisez « Renvoyer le lien » dans quelques minutes.");
+        await loadPwd();
+      });
+      const no = document.createElement("button");
+      no.type = "button";
+      no.textContent = "Refuser";
+      no.style.background = "var(--alert)";
+      no.addEventListener("click", async () => {
+        if (!confirm(`Refuser la demande de ${r.nom || r.email} ?`)) return;
+        const { error: e1 } = await db.rpc("admin_resolve_password_request", { req_id: r.id, approve: false });
+        if (e1) { alert("Refus impossible : " + e1.message); return; }
+        await loadPwd();
+      });
+      actions.append(ok, no);
+    } else {
+      const again = document.createElement("button");
+      again.type = "button";
+      again.textContent = "Renvoyer le lien";
+      again.addEventListener("click", async () => {
+        again.disabled = true;
+        const { error: e2 } = await sendResetLink(r.email);
+        alert(e2 ? "Envoi impossible : " + e2.message : "Lien renvoyé à " + r.email + ".");
+        again.disabled = false;
+      });
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.textContent = "Annuler";
+      cancel.style.background = "var(--alert)";
+      cancel.addEventListener("click", async () => {
+        if (!confirm("Annuler cette autorisation ? Le lien déjà envoyé ne fonctionnera plus.")) return;
+        const { error: e1 } = await db.rpc("admin_resolve_password_request", { req_id: r.id, approve: false });
+        if (e1) { alert("Annulation impossible : " + e1.message); return; }
+        await loadPwd();
+      });
+      actions.append(again, cancel);
+    }
     row.append(info, actions);
     box.appendChild(row);
   });
@@ -931,7 +1217,7 @@ function recount() {
   stats.replies = total;
   setBadge($("bHistory"), total);
   renderOverview();
-  document.title = total ? `(${total}) Espace admin` : "Feedbacks";
+  updateTitle();
 }
 
 async function loadHistory(auto = false) {
@@ -1205,10 +1491,9 @@ $("addForm").addEventListener("submit", async e => {
   });
   const nom = $("newNom").value.trim(), email = $("newEmail").value.trim().toLowerCase();
   const modele = $("newModele").value.trim() || null;
-  if (!/^\S+@\S+\.\S+$/.test(email)) {
-    return fail("Veuillez saisir une vraie adresse email valide.");
-  }
-  const { data, error } = await tmp.auth.signUp({ email, password: $("newPass").value, options: { data: { nom } } });
+  const bad = await checkEmail(email);
+  if (bad) return fail(bad);
+  const { data, error } = await tmp.auth.signUp({ email, password: $("newPass").value, options: { data: { nom }, emailRedirectTo: resetUrl() } });
 
   if (error) {
     return fail(/registered|already/i.test(error.message) ? "Cet email a déjà un compte." : "Création impossible : " + error.message);
