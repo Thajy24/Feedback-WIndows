@@ -26,6 +26,13 @@
   button:disabled { opacity:.6; cursor:default; }
   .err { color:var(--alert); font-size:13px; min-height:18px; margin:6px 0 0; }
   [hidden] { display:none !important; }
+
+  /* Alerte visuelle : l'en-tête pulse et la cloche se balance */
+  header { animation:alerte 1.1s ease-in-out infinite; }
+  header b::before { content:"🔔 "; display:inline-block; transform-origin:top center; animation:sonne .6s ease-in-out infinite; }
+  @keyframes alerte { 0%,100% { background:#e11d48; } 50% { background:#f97316; } }
+  @keyframes sonne { 0%,100% { transform:rotate(0); } 25% { transform:rotate(18deg); } 75% { transform:rotate(-18deg); } }
+  @media (prefers-reduced-motion: reduce) { header, header b::before { animation:none; } }
 </style>
 </head>
 <body>
@@ -51,6 +58,7 @@ let uid = null, queue = [], timer = null;
 
 function finish() {
   clearInterval(timer);
+  clearInterval(remindTimer);
   $("go").disabled = true;
   $("counter").textContent = "Terminé";
   if (window.native) window.native.popupDone(); // ferme le pop-up et libère l'écran
@@ -85,16 +93,19 @@ function render() {
 function updateBtn() { $("go").textContent = $("reply").value.trim() ? "Envoyer la réponse et continuer" : "J'ai lu"; }
 $("reply").addEventListener("input", updateBtn);
 
-/* ---------- Sonnette de comptoir (générée par le navigateur, aucun fichier à ajouter) ---------- */
-const BELL_VOLUME = 0.5; // 0 = muet, 1 = fort
-let audioCtx = null;
+/* ---------- Sonnette de comptoir dynamique (générée par le navigateur, aucun fichier à ajouter) ---------- */
+const BELL_VOLUME = 0.8;  // 0 = muet, 1 = très fort
+const DINGS = 3;          // nombre de coups à chaque sonnerie
+const GAP = 0.14;         // secondes entre deux coups (plus petit = plus pressé)
+const REMIND_MS = 8000;   // la sonnerie se répète tant que le pop-up n'est pas traité (0 = une seule fois)
+let audioCtx = null, master = null, remindTimer = null;
 
-function ding(t0, gain) {
+function ding(t0, gain, base, ring) {
   const out = audioCtx.createGain();
-  out.gain.value = 0.25 * BELL_VOLUME * gain;
-  out.connect(audioCtx.destination);
+  out.gain.value = 0.3 * BELL_VOLUME * gain;
+  out.connect(master);
 
-  // le petit « clac » métallique du marteau
+  // le « clac » métallique du marteau
   const len = Math.floor(audioCtx.sampleRate * 0.025);
   const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
   const d = buf.getChannelData(0);
@@ -108,30 +119,40 @@ function ding(t0, gain) {
   click.start(t0);
 
   // la cloche : notes très aiguës qui s'éteignent à des rythmes différents
-  const base = 2650; // plus haut = plus « sonnette », plus bas = plus « cloche »
   [[1, 1, 1.5], [1.006, 0.8, 1.5], [2.32, 0.5, 1.0], [4.25, 0.3, 0.6], [6.63, 0.18, 0.35]].forEach(([ratio, amp, decay]) => {
     const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    const dur = decay * ring;
     o.type = "sine";
     o.frequency.value = base * ratio;
     g.gain.setValueAtTime(0.0001, t0);
     g.gain.exponentialRampToValueAtTime(amp, t0 + 0.003);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + decay);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     o.connect(g).connect(out);
     o.start(t0);
-    o.stop(t0 + decay + 0.05);
+    o.stop(t0 + dur + 0.05);
   });
 }
 
 function playBell() {
   if (!BELL_VOLUME) return;
   try {
-    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      master = audioCtx.createDynamicsCompressor(); // évite la saturation quand les coups se chevauchent
+      master.connect(audioCtx.destination);
+    }
     audioCtx.resume().then(() => {
       const t = audioCtx.currentTime + 0.05;
-      ding(t, 1);        // ting
-      ding(t + 0.2, 0.9); // ting (deuxième coup rapide)
+      for (let i = 0; i < DINGS; i++) {
+        const last = i === DINGS - 1;
+        // chaque coup est un peu plus aigu et plus fort : effet « ça presse » ; le dernier résonne plus longtemps
+        ding(t + i * GAP, 0.8 + i * 0.1, 2650 * (1 + i * 0.07), last ? 1.6 : 0.7);
+      }
     }).catch(() => {});
   } catch (e) {}
+}
+function startReminder() {
+  if (REMIND_MS && !remindTimer) remindTimer = setInterval(playBell, REMIND_MS);
 }
 const seen = new Set(); // feedbacks déjà annoncés par la cloche
 
@@ -141,7 +162,7 @@ async function refresh() {
   const prev = queue[0]?.id;
   queue = rows;
   if (!queue.length) return finish();
-  if (queue.some(f => !seen.has(f.id))) playBell(); // cloche à l'ouverture et à chaque nouveau feedback
+  if (queue.some(f => !seen.has(f.id))) { playBell(); startReminder(); } // sonnerie à l'ouverture et à chaque nouveau feedback
   queue.forEach(f => seen.add(f.id));
   if (queue[0].id !== prev) render();
   else $("counter").textContent = queue.length > 1 ? `${queue.length} feedbacks à lire` : "1 feedback à lire";
