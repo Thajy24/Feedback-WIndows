@@ -1,5 +1,10 @@
 const { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage, shell, screen, globalShortcut } = require("electron");
 const path = require("path");
+const fs = require("fs");
+
+// Mise à jour automatique de l'exe (GitHub Releases)
+let autoUpdater = null;
+try { ({ autoUpdater } = require("electron-updater")); } catch (e) {}
 
 // Adresse du site : toute modification du site apparaît automatiquement dans l'exe
 const SITE_URL = "https://feedback-flame-eight.vercel.app/";
@@ -12,7 +17,33 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) app.quit();
 
 let win = null, tray = null, quitting = false, retry = null, lastLoad = 0;
-let popupWin = null, overlays = [];
+let popupWin = null, overlays = [], updateReady = false;
+
+/* ---------- Mise à jour automatique de l'exe ---------- */
+const flagFile = () => path.join(app.getPath("userData"), "updated.flag");
+function consumeUpdateFlag() { // après une mise à jour, on redémarre en arrière-plan, sans ouvrir la fenêtre
+  try { if (fs.existsSync(flagFile())) { fs.unlinkSync(flagFile()); return true; } } catch (e) {}
+  return false;
+}
+function tryInstall() {
+  if (!updateReady || !autoUpdater) return;
+  if (popupWin) return;                   // jamais pendant un pop-up
+  if (win && win.isVisible()) return;     // pas pendant que l'agent utilise la fenêtre
+  try { fs.writeFileSync(flagFile(), "1"); } catch (e) {}
+  quitting = true;
+  autoUpdater.quitAndInstall(true, true); // installation silencieuse, puis relance
+}
+function initUpdater() {
+  if (!autoUpdater || !app.isPackaged) return; // seulement dans l'exe installé
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;    // sinon installée à la prochaine fermeture
+  autoUpdater.on("update-downloaded", () => { updateReady = true; tryInstall(); });
+  autoUpdater.on("error", () => {});
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  check();
+  setInterval(check, 60 * 60 * 1000);  // vérifie toutes les heures
+  setInterval(tryInstall, 60 * 1000);  // installe dès que le moment est sûr
+}
 
 // Seules les pages de ton site peuvent envoyer des ordres à l'exe
 const fromSite = e => { try { return e.senderFrame.url.startsWith(ORIGIN); } catch { return false; } };
@@ -82,7 +113,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 440,
     height: 660,
-    show: !process.argv.includes("--hidden"),
+    show: !(process.argv.includes("--hidden") || consumeUpdateFlag()),
     autoHideMenuBar: true,
     icon: path.join(__dirname, "icon.png"),
     webPreferences: {
@@ -138,12 +169,14 @@ app.whenReady().then(() => {
   tray = new Tray(icon);
   tray.setToolTip("Feedback Agence");
   tray.setContextMenu(Menu.buildFromTemplate([
+    { label: "Version " + app.getVersion(), enabled: false },
     { label: "Ouvrir", click: showWin },
     { label: "Quitter", click: () => { quitting = true; app.quit(); } }
   ]));
   tray.on("click", showWin);
   // Secours : Ctrl+Alt+Maj+Q libère l'écran si le pop-up reste bloqué
   globalShortcut.register("CommandOrControl+Alt+Shift+Q", closePopup);
+  initUpdater();
   // Démarre avec Windows, en arrière-plan
   app.setLoginItemSettings({ openAtLogin: true, args: ["--hidden"] });
 });
@@ -158,3 +191,6 @@ ipcMain.on("unread", (e, n) => {
 });
 
 app.on("will-quit", () => globalShortcut.unregisterAll());
+
+// Nécessaire pour que la mise à jour puisse fermer l'appli (la fenêtre se cache au lieu de se fermer)
+app.on("before-quit", () => { quitting = true; });
