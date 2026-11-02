@@ -108,6 +108,15 @@
   .thread-card .bar button.ghost { padding:0; font-size:12px; }
   .thread-card .replybox { margin-top:8px; }
   .thread-card .replybox textarea { min-height:60px; }
+
+  /* Discussions */
+  .agenttabs { margin-top:8px; }
+  .chatlog { max-height:440px; overflow-y:auto; padding:6px 10px 10px; background:#fff; border:1px solid var(--line); border-radius:8px; }
+  .day { text-align:center; font-size:11px; color:var(--muted); margin:12px 0 2px; text-transform:capitalize; }
+  .nochat { color:var(--muted); padding:8px 0; }
+  .composer { margin-top:10px; }
+  .composer textarea { min-height:56px; }
+  .composer input[type=file] { font-size:12px; }
 </style>
 </head>
 <body>
@@ -183,6 +192,10 @@
         </aside>
         <section class="folderView">
           <div id="folderHead" class="muted">Choisissez un agent dans le classeur.</div>
+          <div class="chips" id="secChips" hidden>
+            <button type="button" data-s="fb" class="active">Feedbacks</button>
+            <button type="button" data-s="chat">Discussion</button>
+          </div>
           <div class="chips" id="threadChips" hidden>
             <button type="button" data-v="all" class="active">Tous</button>
             <button type="button" data-v="unread">Non lus</button>
@@ -233,13 +246,18 @@
   <!-- ESPACE AGENT -->
   <section id="agent" hidden>
     <div class="top">
-      <div><h1>Mes feedbacks</h1><span id="agentWho" class="muted"></span> <span class="pstat on" id="myStatus" hidden>Actif</span></div>
+      <div><h1>Mon espace</h1><span id="agentWho" class="muted"></span> <span class="pstat on" id="myStatus" hidden>Actif</span></div>
       <button class="ghost logout">Se déconnecter</button>
     </div>
+    <nav class="tabs agenttabs" id="agentTabs" hidden aria-label="Sections">
+      <button type="button" data-atab="fb">Feedbacks<span id="bFb" class="badge"></span></button>
+      <button type="button" data-atab="chat">Discussion<span id="bChat" class="badge"></span></button>
+    </nav>
+    <div id="apFb">
     <div id="composeWrap" hidden>
-      <button type="button" id="composeOpen">✉️ Envoyer un message</button>
+      <button type="button" id="composeOpen">✉️ Envoyer un feedback</button>
       <div id="composeBox" class="card" hidden style="margin-bottom:12px">
-        <label for="composeText">Votre message à l'administrateur</label>
+        <label for="composeText">Votre feedback à l'administrateur</label>
         <textarea id="composeText"></textarea>
         <label for="composeImg">Image (optionnel)</label>
         <input id="composeImg" type="file" accept="image/*">
@@ -254,6 +272,12 @@
     </div>
     <p class="legend"><span><i class="dot" style="background:var(--recv)"></i>Reçu</span><span><i class="dot" style="background:var(--accent)"></i>Envoyé par vous</span></p>
     <div id="mine"></div>
+    </div>
+    <div id="apChat" hidden>
+      <p class="admin-note">Espace d'échange libre avec l'administrateur, en dehors des feedbacks.</p>
+      <div id="chatList"></div>
+      <div id="chatCompose"></div>
+    </div>
   </section>
 
 </main>
@@ -329,17 +353,39 @@ function refreshPresence() {
 /* ---------- Application Windows (exe) : compteur et notifications ---------- */
 async function checkNotifs() {
   try {
-    const { data: rows, error } = await db.from("feedbacks").select("id,message")
-      .eq("agent_id", uid).eq("lu", false).order("created_at", { ascending: true });
-    if (error || !rows) return;
-    window.native?.unread(rows.length);
-    if (!window.native) return; // pop-up seulement dans l'exe
-    if (rows.length) window.native.popup?.(); // pop-up bloquant (ignoré s'il est déjà ouvert)
+    const [fb, rp, ch] = await Promise.all([
+      db.from("feedbacks").select("id").eq("agent_id", uid).eq("lu", false),
+      db.from("reponses").select("id,feedbacks!inner(agent_id)").eq("lu_agent", false).eq("feedbacks.agent_id", uid),
+      db.from("messages").select("id,message").eq("agent_id", uid).eq("lu_agent", false).order("created_at", { ascending: true })
+    ]);
+    if (fb.error) return;
+    const blocking = fb.data.length + (rp.error ? 0 : rp.data.length); // feedbacks + réponses dans un feedback
+    const chat = ch.error ? [] : ch.data;                               // discussion hors feedback
+    setBadge($("bFb"), blocking);
+    setBadge($("bChat"), atab === "chat" ? 0 : chat.length);
+    window.native?.unread(blocking + chat.length);
+    if (!window.native) return; // pop-up et notifications seulement dans l'exe
+
+    if (blocking) window.native.popup?.(); // pop-up bloquant (ignoré s'il est déjà ouvert)
+
+    // Discussion : simple notification Windows, sans bloquer l'écran
+    let seenChat = [];
+    try { seenChat = JSON.parse(localStorage.getItem("notifiedChat") || "[]"); } catch (e) {}
+    const freshChat = chat.filter(m => !seenChat.includes(m.id));
+    if (atab !== "chat") freshChat.slice(0, 3).forEach(m => {
+      try {
+        const n = new Notification("Nouveau message", { body: (m.message || "Image reçue").slice(0, 200) });
+        n.onclick = () => window.native.show();
+      } catch (e) {}
+    });
+    localStorage.setItem("notifiedChat", JSON.stringify(chat.map(m => m.id)));
+
     let seen = [];
     try { seen = JSON.parse(localStorage.getItem("notifiedIds") || "[]"); } catch (e) {}
-    const fresh = rows.filter(r => !seen.includes(r.id));
-    localStorage.setItem("notifiedIds", JSON.stringify(rows.map(r => r.id)));
-    if (fresh.length) await loadMine(true);
+    const ids = [...fb.data.map(r => "f" + r.id), ...(rp.error ? [] : rp.data.map(r => "r" + r.id))];
+    localStorage.setItem("notifiedIds", JSON.stringify(ids));
+    if (ids.some(i => !seen.includes(i))) await loadMine(true);
+    if (freshChat.length && atab === "chat") await loadChat();
   } catch (e) { console.error(e); }
 }
 
@@ -397,14 +443,14 @@ function bubble(kind, metaText, text, imageUrl) {
 /* ---------- Onglets admin ---------- */
 function setTab(name) {
   tab = name;
-  document.querySelectorAll(".tabs button").forEach(b => {
+  document.querySelectorAll("#admin .tabs button").forEach(b => {
     const on = b.dataset.tab === name;
     b.classList.toggle("active", on);
     b.setAttribute("aria-selected", on);
   });
   document.querySelectorAll("#admin .panel").forEach(p => { p.hidden = p.dataset.panel !== name; });
 }
-document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
+document.querySelectorAll("#admin .tabs button").forEach(b => b.addEventListener("click", () => setTab(b.dataset.tab)));
 
 let stats = { pending: 0, replies: 0 };
 function setBadge(el, n) { el.textContent = n > 0 ? String(n) : ""; }
@@ -461,6 +507,9 @@ async function route() {
   startPresence({ id: uid, nom: p.nom, role: p.role, modele: p.modele });
   myModele = p.modele || null;
   $("composeWrap").hidden = true;
+  $("agentTabs").hidden = true;
+  $("apChat").hidden = true;
+  $("apFb").hidden = false;
   const who = p.nom + (p.modele ? " · Modèle : " + p.modele : "");
   $("myStatus").hidden = false;
 
@@ -491,9 +540,12 @@ async function route() {
     $("chips").hidden = false;
     show("agent");
     $("composeWrap").hidden = false;
+    $("agentTabs").hidden = false;
+    buildChatCompose();
+    setATab(atab);
     await loadMine();
     await checkNotifs();
-    timer = setInterval(() => { loadMine(true); checkNotifs(); }, 30000);
+    timer = setInterval(() => { loadMine(true); checkNotifs(); if (atab === "chat") loadChat(); }, 30000);
   }
 }
 
@@ -552,6 +604,10 @@ document.querySelectorAll(".logout").forEach(b => b.addEventListener("click", as
   await stopPresence(); // l'utilisateur passe « Hors ligne » immédiatement
   window.native?.unread(0);
   localStorage.removeItem("notifiedIds");
+  localStorage.removeItem("notifiedChat");
+  $("chatCompose").replaceChildren();
+  $("chatList").replaceChildren();
+  atab = "fb";
   await db.auth.signOut();
   tab = "overview";
   show("login");
@@ -797,25 +853,103 @@ async function removeReply(r) {
   await loadHistory();
 }
 
+/* ---------- Discussions : éléments communs (admin et agent) ---------- */
+// Bulles d'une discussion. viewerIsAgent = true côté agent. Un message est « de l'agent » si son auteur est l'agent.
+function chatBubbles(msgs, viewerIsAgent, otherName, onDelete) {
+  const log = document.createElement("div");
+  log.className = "chatlog";
+  let last = "";
+  msgs.forEach(m => {
+    const d = new Date(m.created_at);
+    const day = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+    if (day !== last) {
+      const dd = document.createElement("div");
+      dd.className = "day";
+      dd.textContent = day;
+      log.appendChild(dd);
+      last = day;
+    }
+    const fromAgent = m.auteur_id === m.agent_id;
+    const mine = viewerIsAgent ? fromAgent : !fromAgent;
+    const b = bubble(mine ? "sent" : "recv", (mine ? "Vous" : otherName) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), m.message, m.image_url);
+    if (onDelete) b.appendChild(delLink("Supprimer", () => onDelete(m)));
+    log.appendChild(b);
+  });
+  return log;
+}
+
+// Zone d'écriture : Entrée envoie, Maj+Entrée = nouvelle ligne
+function composer(placeholder, onSend) {
+  const box = document.createElement("div");
+  box.className = "composer";
+  const ta = document.createElement("textarea");
+  ta.placeholder = placeholder;
+  const fi = document.createElement("input");
+  fi.type = "file"; fi.accept = "image/*";
+  const prev = document.createElement("img");
+  prev.className = "preview"; prev.alt = "Aperçu"; prev.hidden = true;
+  bindPreview(fi, prev);
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.textContent = "Envoyer";
+  const note = document.createElement("p");
+  note.className = "msg err";
+  async function go() {
+    const message = ta.value.trim(), file = fi.files[0];
+    if (!message && !file) return;
+    btn.disabled = true;
+    note.textContent = "";
+    try {
+      const image_url = await uploadImage(file);
+      await onSend(message, image_url);
+    } catch (e) {
+      note.textContent = "Envoi impossible : " + e.message;
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    ta.value = "";
+    clearFile(fi, prev);
+  }
+  btn.addEventListener("click", ev => { ev.stopPropagation(); go(); });
+  ta.addEventListener("keydown", ev => {
+    ev.stopPropagation();
+    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); go(); }
+  });
+  box.append(ta, fi, prev, btn, note);
+  return box;
+}
+
 /* ---------- Classeur : agents (dossiers) rangés par modèle (tiroirs) et par mois (intercalaires) ---------- */
-let store = [], view = { agent: null, v: "all", q: "" };
+let store = [], chatStore = [], chatErr = "", view = { agent: null, v: "all", q: "", s: "fb" };
 const unreadOf = f => (f.origine === "agent" && f.lu_admin === false ? 1 : 0) + (f.reponses || []).filter(r => !r.lu_admin).length;
+const chatUnread = id => chatStore.filter(m => m.agent_id === id && !m.lu_admin).length;
 const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement);
 
-async function loadHistory(auto = false) {
-  const { data, error } = await db.from("feedbacks")
-    .select("id,message,image_url,modele,lu,origine,lu_admin,created_at,agent_id,agent:profiles!feedbacks_agent_id_fkey(nom,modele),reponses(id,message,image_url,created_at,lu_admin)")
-    .order("created_at", { ascending: false }).limit(500);
-  if (error) {
-    $("folderList").textContent = "Impossible de charger les messages : " + error.message + " (le script SQL a-t-il été exécuté ?)";
-    return;
-  }
-  store = data || [];
-  const total = store.reduce((n, f) => n + unreadOf(f), 0);
+function recount() {
+  const total = store.reduce((n, f) => n + unreadOf(f), 0) + chatStore.filter(m => !m.lu_admin).length;
   stats.replies = total;
   setBadge($("bHistory"), total);
   renderOverview();
   document.title = total ? `(${total}) Espace admin` : "Feedbacks";
+}
+
+async function loadHistory(auto = false) {
+  const [fb, ch] = await Promise.all([
+    db.from("feedbacks")
+      .select("id,message,image_url,modele,lu,origine,lu_admin,created_at,agent_id,agent:profiles!feedbacks_agent_id_fkey(nom,modele),reponses(id,message,image_url,created_at,lu_admin,auteur_id)")
+      .order("created_at", { ascending: false }).limit(500),
+    db.from("messages").select("id,agent_id,auteur_id,message,image_url,created_at,lu_admin")
+      .order("created_at", { ascending: true }).limit(1000)
+  ]);
+  if (fb.error) {
+    $("folderList").textContent = "Impossible de charger les messages : " + fb.error.message + " (le script SQL a-t-il été exécuté ?)";
+    return;
+  }
+  store = fb.data || [];
+  chatStore = ch.error ? [] : (ch.data || []);
+  chatErr = ch.error ? ch.error.message : "";
+  recount();
   if (auto && typingInThread()) return; // ne pas effacer une réponse en cours de saisie
   renderClasseur();
 }
@@ -829,7 +963,8 @@ function renderClasseur() {
     map.get(f.agent_id).items.push(f);
   });
   const hit = f => (f.message || "").toLowerCase().includes(q) || (f.reponses || []).some(r => (r.message || "").toLowerCase().includes(q));
-  const folders = [...map.values()].filter(d => !q || d.nom.toLowerCase().includes(q) || d.items.some(hit))
+  const chatHit = id => chatStore.some(m => m.agent_id === id && (m.message || "").toLowerCase().includes(q));
+  const folders = [...map.values()].filter(d => !q || d.nom.toLowerCase().includes(q) || d.items.some(hit) || chatHit(d.id))
     .sort((a, b) => a.nom.localeCompare(b.nom));
 
   const drawers = new Map();
@@ -857,7 +992,7 @@ function renderClasseur() {
       ct.className = "ct";
       ct.textContent = d.items.length;
       b.append(dot, nm, ct);
-      const un = d.items.reduce((n, f) => n + unreadOf(f), 0);
+      const un = d.items.reduce((n, f) => n + unreadOf(f), 0) + chatUnread(d.id);
       if (un) { const bd = document.createElement("span"); bd.className = "badge"; bd.style.margin = "0"; bd.textContent = un; b.appendChild(bd); }
       b.addEventListener("click", () => { view.agent = d.id; renderClasseur(); });
       list.appendChild(b);
@@ -877,17 +1012,19 @@ async function markRead(items) {
   await loadHistory();
 }
 
+// Un feedback = une conversation : message de départ, puis réponses de l'agent et de l'admin
 function threadCard(f, agentName) {
   const fromAgent = f.origine === "agent";
   const reps = (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
   const card = document.createElement("div");
   card.className = "thread-card" + (unreadOf(f) ? " unread" : "");
 
-  const fb = bubble(fromAgent ? "recv" : "sent", (fromAgent ? "Message de l'agent · " : "Vous · ") + fmt(f.created_at), f.message, f.image_url);
-  fb.appendChild(delLink("Supprimer le message", () => removeFeedback(f, reps)));
+  const fb = bubble(fromAgent ? "recv" : "sent", (fromAgent ? "Feedback de " + agentName : "Vous") + " · " + fmt(f.created_at), f.message, f.image_url);
+  fb.appendChild(delLink("Supprimer le feedback", () => removeFeedback(f, reps)));
   card.appendChild(fb);
   reps.forEach(r => {
-    const rb = bubble("recv", "Réponse de l'agent · " + fmt(r.created_at), r.message, r.image_url);
+    const fromA = r.auteur_id === f.agent_id;
+    const rb = bubble(fromA ? "recv" : "sent", (fromA ? agentName : "Vous") + " · " + fmt(r.created_at), r.message, r.image_url);
     rb.appendChild(delLink("Supprimer la réponse", () => removeReply(r)));
     card.appendChild(rb);
   });
@@ -907,58 +1044,85 @@ function threadCard(f, agentName) {
     mk.addEventListener("click", () => markRead([f]));
     bar.appendChild(mk);
   }
-  if (fromAgent || reps.length) {
-    const open = document.createElement("button");
-    open.type = "button";
-    open.className = "ghost";
-    open.textContent = "Répondre à l'agent";
-    const box = document.createElement("div");
-    box.className = "replybox";
-    box.hidden = true;
-    const ta = document.createElement("textarea");
-    ta.placeholder = "Votre réponse à " + agentName + "…";
-    const send = document.createElement("button");
-    send.type = "button";
-    send.textContent = "Envoyer";
-    const note = document.createElement("p");
-    note.className = "msg err";
-    box.append(ta, send, note);
-    open.addEventListener("click", () => { box.hidden = !box.hidden; if (!box.hidden) ta.focus(); });
-    send.addEventListener("click", async () => {
-      const message = ta.value.trim();
-      if (!message) return;
-      send.disabled = true;
-      const ag = agents.find(a => a.id === f.agent_id);
-      const { error } = await db.from("feedbacks").insert({ agent_id: f.agent_id, auteur_id: uid, message, modele: ag?.modele || f.modele || null });
-      if (error) { note.textContent = "Envoi impossible : " + error.message; send.disabled = false; return; }
-      await markRead([f]);
-    });
-    bar.appendChild(open);
-    card.append(bar, box);
-  } else {
-    card.appendChild(bar);
-  }
+  const open = document.createElement("button");
+  open.type = "button";
+  open.className = "ghost";
+  open.textContent = "💬 Répondre dans ce feedback";
+  const box = composer("Votre réponse à " + agentName + "…", async (message, image_url) => {
+    const { error } = await db.from("reponses").insert({ feedback_id: f.id, auteur_id: uid, message, image_url, lu_admin: true, lu_agent: false });
+    if (error) throw new Error(error.message);
+    await markRead([f]);
+  });
+  box.hidden = true;
+  open.addEventListener("click", () => { box.hidden = !box.hidden; if (!box.hidden) box.querySelector("textarea").focus(); });
+  bar.appendChild(open);
+  card.append(bar, box);
   return card;
+}
+
+async function removeChat(m) {
+  if (!confirm("Supprimer ce message ?\nCette action est définitive.")) return;
+  const { data, error } = await db.from("messages").delete().eq("id", m.id).select("id");
+  if (error || !data || !data.length) { alert("Suppression impossible" + (error ? " : " + error.message : " (droits manquants).")); return; }
+  await removeFiles([m.image_url]);
+  await loadHistory();
+}
+
+function renderChat(d, box) {
+  if (chatErr) { box.textContent = "La discussion n'est pas disponible : " + chatErr + " (le script SQL a-t-il été exécuté ?)"; return; }
+  const msgs = chatStore.filter(m => m.agent_id === d.id);
+  if (msgs.length) {
+    const log = chatBubbles(msgs, false, d.nom, removeChat);
+    box.appendChild(log);
+    setTimeout(() => { log.scrollTop = log.scrollHeight; }, 0);
+  } else {
+    const e = document.createElement("div");
+    e.className = "nochat";
+    e.textContent = "Aucun message dans cette discussion.";
+    box.appendChild(e);
+  }
+  box.appendChild(composer("Écrire à " + d.nom + "… (Entrée pour envoyer)", async (message, image_url) => {
+    const { error } = await db.from("messages").insert({ agent_id: d.id, auteur_id: uid, message, image_url, lu_admin: true, lu_agent: false });
+    if (error) throw new Error(error.message);
+    await loadHistory();
+  }));
+  // Ouvrir la discussion = la lire
+  if (msgs.some(m => !m.lu_admin)) {
+    msgs.forEach(m => { m.lu_admin = true; });
+    recount();
+    db.from("messages").update({ lu_admin: true }).eq("agent_id", d.id).eq("lu_admin", false).then(() => {});
+    setTimeout(renderClasseur, 0); // met à jour les pastilles du classeur
+  }
 }
 
 function renderThread(d, q, hit) {
   const head = $("folderHead"), box = $("thread");
   box.replaceChildren();
-  $("threadChips").hidden = !d;
+  $("secChips").hidden = !d;
+  $("threadChips").hidden = !d || view.s !== "fb";
   if (!d) { head.className = "muted"; head.textContent = "Choisissez un agent dans le classeur."; return; }
   document.querySelectorAll("#threadChips button").forEach(x => x.classList.toggle("active", x.dataset.v === view.v));
 
-  const un = d.items.reduce((n, f) => n + unreadOf(f), 0);
+  const fbUn = d.items.reduce((n, f) => n + unreadOf(f), 0), chUn = chatUnread(d.id);
+  document.querySelectorAll("#secChips button").forEach(x => {
+    const isFb = x.dataset.s === "fb", n = isFb ? fbUn : chUn;
+    x.textContent = (isFb ? "Feedbacks" : "Discussion") + (n ? " · " + n : "");
+    x.classList.toggle("active", x.dataset.s === view.s);
+  });
+
   head.className = "";
   head.replaceChildren();
   const nm = document.createElement("strong");
   nm.textContent = d.nom;
   const cnt = document.createElement("span");
   cnt.className = "muted";
-  cnt.textContent = `${d.items.length} message${d.items.length > 1 ? "s" : ""}${un ? " · " + un + " non lu" + (un > 1 ? "s" : "") : ""}`;
+  cnt.textContent = `${d.items.length} feedback${d.items.length > 1 ? "s" : ""}${fbUn ? " · " + fbUn + " non lu" + (fbUn > 1 ? "s" : "") : ""}`;
   head.append(pstat(d.id), nm, cnt);
   if (d.modele) { const m = document.createElement("span"); m.className = "tag model"; m.textContent = d.modele; head.appendChild(m); }
-  if (un) {
+
+  if (view.s === "chat") { renderChat(d, box); return; }
+
+  if (fbUn) {
     const all = document.createElement("button");
     all.type = "button";
     all.textContent = "Tout marquer comme lu";
@@ -970,7 +1134,7 @@ function renderThread(d, q, hit) {
   const items = d.items.filter(f =>
     (view.v === "all" || (view.v === "unread" && unreadOf(f) > 0) || (view.v === "agent" && f.origine === "agent") || (view.v === "admin" && f.origine !== "agent")) &&
     (!q || nameHit || hit(f)));
-  if (!items.length) { box.textContent = "Aucun message dans ce dossier."; return; }
+  if (!items.length) { box.textContent = "Aucun feedback dans ce dossier."; return; }
 
   let last = "";
   items.forEach(f => {
@@ -986,6 +1150,7 @@ function renderThread(d, q, hit) {
   });
 }
 
+document.querySelectorAll("#secChips button").forEach(b => b.addEventListener("click", () => { view.s = b.dataset.s; renderClasseur(); }));
 $("folderSearch").addEventListener("input", e => { view.q = e.target.value; renderClasseur(); });
 document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener("click", () => { view.v = b.dataset.v; renderClasseur(); }));
 
@@ -1095,7 +1260,7 @@ $("composeSend").addEventListener("click", async () => {
   $("composeText").value = "";
   clearFile($("composeImg"), $("composePrev"));
   out.className = "msg ok";
-  out.textContent = "Message envoyé à l'administrateur.";
+  out.textContent = "Feedback envoyé à l'administrateur.";
   await loadMine();
 });
 
@@ -1106,34 +1271,98 @@ document.querySelectorAll("#chips button").forEach(b => b.addEventListener("clic
   loadMine();
 }));
 
+/* ---------- Espace agent : onglets et discussion hors feedback ---------- */
+let atab = "fb";
+function setATab(n) {
+  atab = n;
+  document.querySelectorAll("#agentTabs button").forEach(b => b.classList.toggle("active", b.dataset.atab === n));
+  $("apFb").hidden = n !== "fb";
+  $("apChat").hidden = n !== "chat";
+  if (n === "chat") loadChat();
+}
+document.querySelectorAll("#agentTabs button").forEach(b => b.addEventListener("click", () => setATab(b.dataset.atab)));
+
+function buildChatCompose() {
+  if ($("chatCompose").childElementCount) return;
+  $("chatCompose").appendChild(composer("Écrire à l'administrateur… (Entrée pour envoyer)", async (message, image_url) => {
+    const { error } = await db.from("messages").insert({ agent_id: uid, auteur_id: uid, message, image_url, lu_agent: true, lu_admin: false });
+    if (error) throw new Error(error.message);
+    await loadChat();
+  }));
+}
+
+async function loadChat() {
+  const box = $("chatList");
+  const { data, error } = await db.from("messages").select("id,agent_id,auteur_id,message,image_url,created_at,lu_agent")
+    .eq("agent_id", uid).order("created_at", { ascending: true }).limit(300);
+  if (error) { box.textContent = "La discussion n'est pas disponible : " + error.message; return; }
+  const old = box.firstElementChild;
+  const stick = !old || !old.classList.contains("chatlog") || old.scrollHeight - old.scrollTop - old.clientHeight < 40;
+  const oldTop = old ? old.scrollTop : 0;
+  box.replaceChildren();
+  if (!data.length) {
+    const e = document.createElement("div");
+    e.className = "nochat";
+    e.textContent = "Aucun message pour le moment. Écrivez le premier !";
+    box.appendChild(e);
+  } else {
+    const log = chatBubbles(data, true, "Administrateur");
+    box.appendChild(log);
+    setTimeout(() => { log.scrollTop = stick ? log.scrollHeight : oldTop; }, 0);
+  }
+  if (data.some(m => !m.lu_agent) && atab === "chat") {
+    await db.from("messages").update({ lu_agent: true }).eq("agent_id", uid).eq("lu_agent", false);
+    setBadge($("bChat"), 0);
+  }
+}
+
+/* ---------- Espace agent : feedbacks en conversation ---------- */
+const agentUnread = f => (!f.lu ? 1 : 0) + (f.reponses || []).filter(r => r.lu_agent === false).length;
+
+async function markReadAgent(f) {
+  if (!f.lu) await db.from("feedbacks").update({ lu: true }).eq("id", f.id);
+  if ((f.reponses || []).some(r => r.lu_agent === false)) await db.from("reponses").update({ lu_agent: true }).eq("feedback_id", f.id).eq("lu_agent", false);
+}
+
 async function loadMine(auto = false) {
   const list = $("mine");
   // Ne pas effacer une réponse en cours de saisie lors de l'actualisation automatique
   if (auto && ([...list.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement)
       || [...list.querySelectorAll("input[type=file]")].some(i => i.files.length))) return;
 
-  const { data, error } = await db.from("feedbacks").select("*,reponses(id,message,image_url,created_at)").eq("agent_id", uid)
+  const { data, error } = await db.from("feedbacks").select("*,reponses(id,message,image_url,created_at,auteur_id,lu_agent)").eq("agent_id", uid)
     .order("created_at", { ascending: false }).limit(50);
   list.replaceChildren();
-  if (error) { list.textContent = "Impossible de charger vos feedbacks."; return; }
+  if (error) { list.textContent = "Impossible de charger vos feedbacks : " + error.message + " (le script SQL a-t-il été exécuté ?)"; return; }
   if (!data.length) { list.textContent = "Aucun feedback pour le moment."; return; }
 
-  const unread = data.filter(f => !f.lu).length;
+  const unread = data.reduce((n, f) => n + agentUnread(f), 0);
   document.title = unread ? `(${unread}) Mes feedbacks` : "Mes feedbacks";
-  window.native?.unread(unread);
+  setBadge($("bFb"), unread);
 
-  const shown = mineFilter === "unread" ? data.filter(f => !f.lu) : data;
+  const shown = mineFilter === "unread" ? data.filter(f => agentUnread(f) > 0) : data;
   if (!shown.length) { list.textContent = "Aucun feedback non lu."; return; }
 
+  let lastMonth = "";
   shown.forEach(f => {
+    const mk = new Date(f.created_at).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+    if (mk !== lastMonth) {
+      const m = document.createElement("div");
+      m.className = "month";
+      m.textContent = mk;
+      list.appendChild(m);
+      lastMonth = mk;
+    }
+
+    const un = agentUnread(f);
     const div = document.createElement("div");
-    div.className = "fb" + (f.lu ? "" : " unread");
+    div.className = "fb" + (un ? " unread" : "");
     div.tabIndex = 0;
 
     const meta = document.createElement("div");
     meta.className = "meta";
     const dt = document.createElement("span");
-    dt.textContent = fmt(f.created_at) + (f.lu ? "" : " · cliquez pour marquer comme lu");
+    dt.textContent = fmt(f.created_at) + (un ? " · cliquez pour marquer comme lu" : "");
     meta.appendChild(dt);
     if (f.modele) {
       const mt = document.createElement("span");
@@ -1143,64 +1372,32 @@ async function loadMine(auto = false) {
     }
     div.appendChild(meta);
 
+    // La conversation : message de départ puis réponses des deux côtés
     if (f.origine === "agent") div.appendChild(bubble("sent", "Vous · " + fmt(f.created_at), f.message, f.image_url));
-    else div.appendChild(bubble("recv", "Reçu", f.message, f.image_url));
+    else div.appendChild(bubble("recv", "Administrateur · " + fmt(f.created_at), f.message, f.image_url));
     (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach(r => {
-      div.appendChild(bubble("sent", "Votre réponse · " + fmt(r.created_at), r.message, r.image_url));
+      const mine = r.auteur_id === uid;
+      div.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : "Administrateur") + " · " + fmt(r.created_at), r.message, r.image_url));
     });
 
     const open = document.createElement("button");
     open.type = "button";
     open.className = "ghost";
     open.style.marginTop = "8px";
-    open.textContent = "Répondre";
-    const box = document.createElement("div");
-    box.hidden = true;
-    box.style.marginTop = "8px";
-    const ta = document.createElement("textarea");
-    ta.placeholder = "Votre réponse...";
-    const fileLbl = document.createElement("label");
-    fileLbl.textContent = "Image (optionnel)";
-    const fi = document.createElement("input");
-    fi.type = "file"; fi.accept = "image/*";
-    const prev = document.createElement("img");
-    prev.className = "preview"; prev.alt = "Aperçu"; prev.hidden = true;
-    bindPreview(fi, prev);
-    const send = document.createElement("button");
-    send.type = "button";
-    send.textContent = "Envoyer la réponse";
-    const note = document.createElement("p");
-    note.className = "msg err";
-    box.append(ta, fileLbl, fi, prev, send, note);
-    open.addEventListener("click", ev => { ev.stopPropagation(); box.hidden = !box.hidden; if (!box.hidden) ta.focus(); });
-    box.addEventListener("click", ev => ev.stopPropagation());
-    send.addEventListener("click", async ev => {
-      ev.stopPropagation();
-      const message = ta.value.trim();
-      const file = fi.files[0];
-      if (!message && !file) return;
-      send.disabled = true;
-      note.textContent = "";
-      try {
-        const image_url = await uploadImage(file);
-        const { error: err } = await db.from("reponses").insert({ feedback_id: f.id, auteur_id: uid, message, image_url });
-        if (err) throw new Error(err.message);
-      } catch (e) {
-        note.textContent = "Envoi impossible : " + e.message;
-        send.disabled = false;
-        return;
-      }
-      ta.value = "";
-      clearFile(fi, prev);
+    open.textContent = "💬 Répondre dans ce feedback";
+    const box = composer("Votre réponse…", async (message, image_url) => {
+      const { error: err } = await db.from("reponses").insert({ feedback_id: f.id, auteur_id: uid, message, image_url, lu_admin: false, lu_agent: true });
+      if (err) throw new Error(err.message);
+      await markReadAgent(f);
       await loadMine();
     });
+    box.hidden = true;
+    open.addEventListener("click", ev => { ev.stopPropagation(); box.hidden = !box.hidden; if (!box.hidden) box.querySelector("textarea").focus(); });
+    box.addEventListener("click", ev => ev.stopPropagation());
     div.append(open, box);
 
-    if (!f.lu) {
-      const markRead = async () => {
-        await db.from("feedbacks").update({ lu: true }).eq("id", f.id);
-        await loadMine();
-      };
+    if (un) {
+      const markRead = async () => { await markReadAgent(f); await loadMine(); };
       div.addEventListener("click", markRead, { once: true });
       div.addEventListener("keydown", e => { if (e.target === div && e.key === "Enter") markRead(); });
     }
