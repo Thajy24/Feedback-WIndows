@@ -395,34 +395,6 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
 .fdir .chev{width:16px;height:16px;flex:none;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
 .fdir[open]>summary .chev{transform:rotate(90deg)}
 .fdir>.thread-card,.fdir>.fb{margin-bottom:0;border-top-left-radius:0;border-top-right-radius:0;border-top:0}
-/* ----- Tâches (un dossier par feedback) ----- */
-.taskform{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:14px}
-.taskform textarea{min-height:64px;margin-bottom:10px}
-.taskform .tfrow{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
-.taskform select{flex:1 1 240px;margin:0;min-width:0}
-.taskform button{width:auto;margin:0;padding:9px 20px}
-.taskform .msg{margin-top:8px}
-.tfolder{background:var(--card);border:1px solid var(--line);border-radius:16px;margin-bottom:12px;box-shadow:var(--shadow);overflow:hidden}
-.tfolder>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:12px 16px;user-select:none}
-.tfolder>summary::-webkit-details-marker{display:none}
-.tfolder>summary:hover{background:var(--accent-soft)}
-.tfolder .fi{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;flex:none;color:var(--accent);background:var(--accent-soft)}
-.tfolder .fi svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.tfolder .tt{flex:1;min-width:0}
-.tfolder .tt b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tfolder .tt span{font-size:12px;color:var(--muted)}
-.tfolder .chev{width:16px;height:16px;flex:none;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
-.tfolder[open] .chev{transform:rotate(90deg)}
-.trows{border-top:1px solid var(--line)}
-.titem{display:flex;align-items:flex-start;gap:12px;padding:11px 16px;border-bottom:1px solid var(--line)}
-.titem:last-child{border-bottom:0}
-.titem input[type=checkbox]{width:18px;height:18px;margin:2px 0 0;flex:none;accent-color:var(--ok);cursor:pointer}
-.titem .tx{flex:1;min-width:0}
-.titem .tx div{white-space:pre-wrap;overflow-wrap:anywhere}
-.titem .when{font-size:11px;color:var(--muted);margin-top:2px}
-.titem.done .tx div:first-child{text-decoration:line-through;color:var(--muted)}
-.taskform .msg:empty{display:none}
-.titem button.ghost{font-size:12px;flex:none}
 </style>
 </head>
 <body>
@@ -549,7 +521,6 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
           <div class="chips" id="secChips" hidden>
             <button type="button" data-s="fb" class="active">Feedbacks</button>
             <button type="button" data-s="chat">Discussion</button>
-            <button type="button" data-s="task">Tâches</button>
           </div>
           <div class="chips" id="threadChips" hidden>
             <button type="button" data-v="all" class="active">Tous</button>
@@ -2222,14 +2193,12 @@ function recount() {
 }
 
 async function loadHistory(auto = false) {
-  const [fb, ch, tk] = await Promise.all([
+  const [fb, ch] = await Promise.all([
     db.from("feedbacks")
       .select("id,message,image_url,modele,lu,origine,lu_admin,created_at,agent_id,auteur_id,agent:profiles!feedbacks_agent_id_fkey(nom,modele),reponses(id,message,image_url,created_at,lu_admin,auteur_id)")
       .order("created_at", { ascending: false }).limit(500),
     db.from("messages").select("id,agent_id,auteur_id,message,image_url,created_at,lu_admin")
-      .order("created_at", { ascending: true }).limit(1000),
-    db.from("taches").select("id,agent_id,feedback_id,message,statut,created_at,fait_at")
-      .order("created_at", { ascending: false }).limit(1000)
+      .order("created_at", { ascending: true }).limit(1000)
   ]);
   if (fb.error) {
     $("folderList").textContent = "Impossible de charger les messages : " + fb.error.message + " (le script SQL a-t-il été exécuté ?)";
@@ -2238,8 +2207,6 @@ async function loadHistory(auto = false) {
   store = fb.data || [];
   chatStore = ch.error ? [] : (ch.data || []);
   chatErr = ch.error ? ch.error.message : "";
-  taskStore = tk.error ? [] : (tk.data || []);
-  taskErr = tk.error ? tk.error.message : "";
   recount();
   if (auto && typingInThread()) return; // ne pas effacer une réponse en cours de saisie
   renderClasseur();
@@ -2304,6 +2271,13 @@ async function markRead(items) {
 }
 
 // Un feedback = une conversation : message de départ, puis réponses de l'agent et de l'admin
+const SVG_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
+const SVG_CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+function fbLabel(f) {
+  const m = (f.message || "").trim().replace(/\s+/g, " ");
+  if (m) return m.length > 70 ? m.slice(0, 70) + "…" : m;
+  return f.image_url ? (isAudio(f.image_url) ? "Message vocal" : "Photo jointe") : "Feedback";
+}
 const fdirOpen = new Map(); // dossier -> ouvert ou fermé (conservé quand la liste se rafraîchit)
 function fbTitle(f) {
   const d = new Date(f.created_at);
@@ -2379,134 +2353,8 @@ function threadCard(f, agentName) {
   box.hidden = true;
   open.addEventListener("click", () => { box.hidden = !box.hidden; if (!box.hidden) box.querySelector("textarea").focus(); });
   bar.appendChild(open);
-  const tk = taskStore.filter(t => String(t.feedback_id) === String(f.id));
-  if (tk.length) {
-    const todo = tk.filter(t => t.statut !== "fait").length, tt = document.createElement("span");
-    tt.className = "tag model";
-    tt.textContent = tk.length + " tâche" + (tk.length > 1 ? "s" : "") + (todo ? " · " + todo + " à faire" : " · toutes faites");
-    bar.appendChild(tt);
-  }
-  const addT = document.createElement("button");
-  addT.type = "button";
-  addT.className = "ghost";
-  addT.textContent = "Ajouter une tâche";
-  addT.addEventListener("click", () => { exitSelect(); pendingTaskFb = f.id; view.s = "task"; renderClasseur(); });
-  bar.appendChild(addT);
   card.append(bar, box);
   return card;
-}
-
-/* ---------- Tâches par agent : rangées en dossiers, un dossier par feedback ---------- */
-let taskStore = [], taskErr = "", pendingTaskFb = null, taskFilter = "all";
-const taskOpen = new Map(); // dossier -> ouvert ou fermé (conservé quand la liste se rafraîchit)
-const openTasks = id => taskStore.filter(t => t.agent_id === id && t.statut !== "fait").length;
-function fbLabel(f) {
-  const m = (f.message || "").trim().replace(/\s+/g, " ");
-  if (m) return m.length > 70 ? m.slice(0, 70) + "…" : m;
-  return f.image_url ? (isAudio(f.image_url) ? "Message vocal" : "Photo jointe") : "Feedback";
-}
-const SVG_FOLDER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>';
-const SVG_CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
-
-function renderTasks(d, box) {
-  if (taskErr) { box.textContent = "Les tâches ne sont pas disponibles : " + taskErr + " (exécutez le script taches.sql dans Supabase)."; return; }
-  const mk = (tag, cls, txt) => { const x = document.createElement(tag); if (cls) x.className = cls; if (txt != null) x.textContent = txt; return x; };
-
-  /* Formulaire : nouvelle tâche pour cet agent, dans le dossier d'un feedback (ou « Général ») */
-  const form = mk("div", "taskform");
-  const ta = mk("textarea");
-  ta.placeholder = "Nouvelle tâche pour " + d.nom + "… (Entrée pour ajouter, Maj+Entrée pour un retour à la ligne)";
-  const row = mk("div", "tfrow");
-  const sel = mk("select");
-  sel.setAttribute("aria-label", "Dossier de la tâche");
-  const g = mk("option", "", "Dossier : Général (sans feedback)");
-  g.value = "";
-  sel.appendChild(g);
-  d.items.forEach(f => { const o = mk("option", "", "Dossier : " + fmt(f.created_at) + " · " + fbLabel(f)); o.value = String(f.id); sel.appendChild(o); });
-  if (pendingTaskFb != null && d.items.some(f => String(f.id) === String(pendingTaskFb))) sel.value = String(pendingTaskFb);
-  pendingTaskFb = null;
-  const addBtn = mk("button", "", "Ajouter la tâche");
-  addBtn.type = "button";
-  const note = mk("p", "msg err");
-  async function add() {
-    const message = ta.value.trim();
-    if (!message || addBtn.disabled) return;
-    addBtn.disabled = true; note.textContent = "";
-    const f = d.items.find(x => String(x.id) === sel.value);
-    const { error } = await db.from("taches").insert({ agent_id: d.id, feedback_id: f ? f.id : null, message, auteur_id: uid });
-    addBtn.disabled = false;
-    if (error) { note.textContent = "Ajout impossible : " + error.message; return; }
-    taskOpen.set(d.id + ":" + (f ? f.id : "g"), true);
-    toast("Tâche ajoutée");
-    await loadHistory();
-  }
-  addBtn.addEventListener("click", add);
-  ta.addEventListener("keydown", ev => { ev.stopPropagation(); if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); add(); } });
-  row.append(sel, addBtn);
-  form.append(ta, row, note);
-  box.appendChild(form);
-
-  /* Filtres */
-  const mine = taskStore.filter(t => t.agent_id === d.id);
-  const chips = mk("div", "chips");
-  [["all", "Toutes (" + mine.length + ")"], ["todo", "À faire (" + mine.filter(t => t.statut !== "fait").length + ")"], ["done", "Faites (" + mine.filter(t => t.statut === "fait").length + ")"]].forEach(([v, label]) => {
-    const b = mk("button", v === taskFilter ? "active" : "", label);
-    b.type = "button";
-    b.addEventListener("click", () => { taskFilter = v; renderClasseur(); });
-    chips.appendChild(b);
-  });
-  box.appendChild(chips);
-
-  const shown = mine.filter(t => taskFilter === "all" || (taskFilter === "done" ? t.statut === "fait" : t.statut !== "fait"));
-  if (!shown.length) { box.appendChild(mk("div", "nochat", mine.length ? "Aucune tâche dans ce filtre." : "Aucune tâche pour cet agent. Ajoutez-en une ci-dessus.")); return; }
-
-  /* Un dossier par feedback (« Général » pour les tâches sans feedback) */
-  const folders = new Map();
-  shown.forEach(t => { const k = t.feedback_id == null ? "g" : String(t.feedback_id); if (!folders.has(k)) folders.set(k, []); folders.get(k).push(t); });
-  [...folders.entries()].sort((a, b) => (a[0] === "g") - (b[0] === "g") || b[1][0].created_at.localeCompare(a[1][0].created_at)).forEach(([k, list]) => {
-    const f = k === "g" ? null : d.items.find(x => String(x.id) === k);
-    const key = d.id + ":" + k;
-    const det = mk("details", "tfolder");
-    det.open = taskOpen.has(key) ? taskOpen.get(key) : true;
-    det.addEventListener("toggle", () => taskOpen.set(key, det.open));
-    const sum = mk("summary");
-    const fi = mk("span", "fi"); fi.innerHTML = SVG_FOLDER;
-    const tt = mk("div", "tt");
-    tt.append(mk("b", "", f ? fbLabel(f) : k === "g" ? "Général" : "Feedback supprimé"), mk("span", "", f ? "Dossier du feedback du " + fmt(f.created_at) : k === "g" ? "Tâches sans feedback associé" : ""));
-    const todo = list.filter(t => t.statut !== "fait").length, done = list.length - todo;
-    const cnt = mk("span", "tag " + (todo ? "unread" : "read"), todo ? todo + " à faire" + (done ? " · " + done + " faite" + (done > 1 ? "s" : "") : "") : "Tout est fait");
-    sum.append(fi, tt, cnt);
-    sum.insertAdjacentHTML("beforeend", SVG_CHEV);
-    det.appendChild(sum);
-    const rows = mk("div", "trows");
-    list.slice().sort((a, b) => (a.statut === "fait") - (b.statut === "fait") || b.created_at.localeCompare(a.created_at)).forEach(t => {
-      const it = mk("div", "titem" + (t.statut === "fait" ? " done" : ""));
-      const cb = mk("input");
-      cb.type = "checkbox"; cb.checked = t.statut === "fait";
-      cb.setAttribute("aria-label", "Tâche faite");
-      cb.addEventListener("change", async () => {
-        const fait = cb.checked;
-        const { data, error } = await db.from("taches").update({ statut: fait ? "fait" : "a_faire", fait_at: fait ? new Date().toISOString() : null }).eq("id", t.id).select("id");
-        if (error || !data || !data.length) { cb.checked = !fait; toast("Modification impossible"); return; }
-        await loadHistory();
-      });
-      const tx = mk("div", "tx");
-      tx.append(mk("div", "", t.message), mk("div", "when", "Ajoutée le " + fmt(t.created_at) + (t.statut === "fait" && t.fait_at ? " · faite le " + fmt(t.fait_at) : "")));
-      const del = mk("button", "ghost", "Supprimer");
-      del.type = "button";
-      del.addEventListener("click", async () => {
-        if (!confirm("Supprimer cette tâche ?\nCette action est définitive.")) return;
-        const { data, error } = await db.from("taches").delete().eq("id", t.id).select("id");
-        if (error || !data || !data.length) { toast("Suppression impossible"); return; }
-        toast("Tâche supprimée");
-        await loadHistory();
-      });
-      it.append(cb, tx, del);
-      rows.appendChild(it);
-    });
-    det.appendChild(rows);
-    box.appendChild(det);
-  });
 }
 
 function renderChat(d, box) {
@@ -2562,8 +2410,8 @@ function renderThread(d, q, hit) {
 
   const fbUn = d.items.reduce((n, f) => n + unreadOf(f), 0), chUn = chatUnread(d.id);
   document.querySelectorAll("#secChips button").forEach(x => {
-    const k = x.dataset.s, n = k === "fb" ? fbUn : k === "chat" ? chUn : openTasks(d.id);
-    x.textContent = (k === "fb" ? "Feedbacks" : k === "chat" ? "Discussion" : "Tâches") + (n ? " · " + n : "");
+    const isFb = x.dataset.s === "fb", n = isFb ? fbUn : chUn;
+    x.textContent = (isFb ? "Feedbacks" : "Discussion") + (n ? " · " + n : "");
     x.classList.toggle("active", x.dataset.s === view.s);
   });
 
@@ -2576,10 +2424,9 @@ function renderThread(d, q, hit) {
   cnt.textContent = `${d.items.length} feedback${d.items.length > 1 ? "s" : ""}${fbUn ? " · " + fbUn + " non lu" + (fbUn > 1 ? "s" : "") : ""}`;
   head.append(pstat(d.id), nm, cnt);
   if (d.modele) { const m = document.createElement("span"); m.className = "tag model"; m.textContent = d.modele; head.appendChild(m); }
-  if (view.s !== "task") head.appendChild(selectBtn());
+  head.appendChild(selectBtn());
 
   if (view.s === "chat") { renderChat(d, box); return; }
-  if (view.s === "task") { renderTasks(d, box); return; }
 
   if (fbUn) {
     const all = document.createElement("button");
