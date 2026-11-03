@@ -245,6 +245,94 @@ html[data-theme=dark] button.folder.active{border-color:#3b43a0}
 html[data-theme=dark] .month{color:#c7cbff}
 html[data-theme=dark] .drawer{color:#b3a4ff}
 html[data-theme=dark] .bubble.recv{box-shadow:none}
+
+/* ----- Aperçu photo (zoom) ----- */
+.lb{position:fixed;inset:0;z-index:200;display:none;flex-direction:column;background:rgba(8,10,28,.9);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.lb.open{display:flex;animation:fadein .2s ease both}
+.lb .bar{display:flex;gap:6px;align-items:center;justify-content:center;padding:12px;flex-wrap:wrap}
+.lb .bar button{width:auto;margin:0;padding:7px 13px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);box-shadow:none;font-size:13px;font-weight:600;color:#fff;border-radius:9px}
+.lb .bar button:hover:not(:disabled){background:rgba(255,255,255,.24);transform:none;box-shadow:none;filter:none}
+.lb .bar .lvl{color:#fff;font-weight:700;min-width:58px;text-align:center;font-variant-numeric:tabular-nums;font-size:13px}
+.lb .stage{flex:1;overflow:hidden;display:grid;place-items:center;cursor:grab;touch-action:none}
+.lb .stage.drag{cursor:grabbing}
+.lb img{max-width:92vw;max-height:78vh;transform-origin:center;transition:transform .12s ease-out;user-select:none;-webkit-user-drag:none;border-radius:8px;box-shadow:0 24px 70px rgba(0,0,0,.55);cursor:inherit}
+.lb .stage.drag img{transition:none}
+
+/* ----- Menu clic droit ----- */
+.ctxm{position:fixed;z-index:300;min-width:220px;padding:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;box-shadow:0 22px 48px -14px rgba(15,19,48,.45);animation:fadein .12s ease both}
+.ctxm button{display:flex;justify-content:space-between;align-items:center;gap:22px;width:100%;margin:0;padding:8px 10px;background:none;color:var(--ink);box-shadow:none;border-radius:8px;font-weight:500;font-size:13px;text-align:left}
+.ctxm button:hover:not(:disabled),.ctxm button:focus-visible{background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none;outline:0}
+.ctxm button.danger:hover:not(:disabled),.ctxm button.danger:focus-visible{background:#fff1f3;color:var(--alert)}
+.ctxm kbd{font:inherit;font-size:11px;opacity:.55}
+.ctxm hr{border:0;border-top:1px solid var(--line);margin:4px 2px}
+html[data-theme=dark] .ctxm button.danger:hover:not(:disabled),html[data-theme=dark] .ctxm button.danger:focus-visible{background:#3a1020;color:#fda4af}
+
+/* ----- Notification discrète ----- */
+.toast{position:fixed;left:50%;bottom:28px;z-index:400;padding:9px 18px;border-radius:99px;background:#0f1330;color:#fff;font-weight:600;font-size:13px;box-shadow:0 14px 34px -10px rgba(0,0,0,.55);animation:toastin .25s ease both}
+.toast.out{animation:toastout .35s ease forwards}
+@keyframes toastin{from{opacity:0;transform:translate(-50%,10px)}to{opacity:1;transform:translate(-50%,0)}}
+@keyframes toastout{from{opacity:1;transform:translate(-50%,0)}to{opacity:0;transform:translate(-50%,6px)}}
+@keyframes fadein{from{opacity:0}to{opacity:1}}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ----- Message vocal ----- */
+.voice{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0 0 12px}
+.voice button{width:auto;margin:0;padding:7px 14px;font-size:13px}
+.voice button.mic{background:var(--card);color:var(--ink);border:1px solid #cfd4ea;box-shadow:none}
+.voice button.mic::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--alert);margin-right:8px}
+.voice button.mic:hover:not(:disabled){background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none}
+.voice button.stop{background:linear-gradient(135deg,#e11d48,#f43f5e);box-shadow:0 6px 14px -6px rgba(225,29,72,.6)}
+.voice button.plain{background:var(--card);color:var(--ink);border:1px solid #cfd4ea;box-shadow:none}
+.voice button.plain:hover:not(:disabled){background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none}
+.voice .timer{font-variant-numeric:tabular-nums;font-weight:700;color:var(--alert);min-width:38px}
+.voice .recdot{width:10px;height:10px;border-radius:50%;background:var(--alert);animation:recpulse 1s ease-in-out infinite}
+.voice audio{height:38px;max-width:100%}
+@keyframes recpulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.35;transform:scale(.8)}}
+.bubble audio{display:block;width:260px;max-width:100%;height:38px;margin-top:8px}
+html[data-theme=dark] .voice button.mic,html[data-theme=dark] .voice button.plain{border-color:#2d3466}
+
+/* ----- Boutons Actualiser / Sélectionner ----- */
+.rfbtn{display:inline-flex;align-items:center;gap:6px;width:auto;margin:0;padding:6px 14px;border-radius:99px;background:var(--card);color:var(--ink);border:1px solid var(--line);font-size:13px;font-weight:600;box-shadow:none}
+.rfbtn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.rfbtn:hover:not(:disabled){background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none}
+.rfbtn.busy svg{animation:spin .8s linear infinite}
+#folderHead button + button{margin-left:0}
+
+/* ----- Actions sur les messages (modifier, sélectionner, supprimer) ----- */
+.bubble{position:relative}
+.bubble:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.bubble .acts{display:flex;gap:12px;height:16px;margin-top:4px;opacity:0;transition:opacity .18s}
+.bubble:hover .acts,.bubble:focus-within .acts{opacity:1}
+@media (hover:none){.bubble .acts{opacity:1}}
+.bubble .acts button{width:auto;margin:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none;color:inherit;opacity:.8;text-decoration:underline;font-size:11px;font-weight:500;line-height:16px}
+.bubble .acts button:hover:not(:disabled){opacity:1;transform:none;box-shadow:none;filter:none}
+.editbox{margin-top:6px}
+.editbox textarea{min-height:64px;margin:0 0 6px;font-size:14px;color:var(--ink);background:var(--card);border-color:var(--line)}
+.editbox .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.editbox .row button{width:auto;margin:0;padding:5px 14px;font-size:12px;background:var(--card);color:var(--accent);box-shadow:none;border:1px solid var(--line)}
+.editbox .row button.go{background:var(--grad);color:#fff;border-color:transparent}
+.editbox .row button:hover:not(:disabled){transform:none;box-shadow:none}
+.editbox .hint{font-size:11px;opacity:.75}
+.editbox .editnote{font-size:12px;font-weight:600}
+.editbox .editnote:empty{display:none}
+.bubble.recv .editnote{color:var(--alert)}
+.bubble.sent .editnote{color:#ffe4ea}
+
+/* ----- Mode sélection ----- */
+body.selecting .bubble[data-sk]{cursor:pointer;user-select:none}
+body.selecting .bubble[data-nosel]{opacity:.45}
+body.selecting .acts{display:none}
+body.selecting .bubble[data-sk]::before{content:"";position:absolute;top:-7px;left:-7px;width:20px;height:20px;border-radius:50%;background:var(--card);border:2px solid #aab1da;z-index:2;transition:background .15s,border-color .15s}
+body.selecting .bubble.picked{outline:2px solid var(--accent2);outline-offset:2px}
+body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5 9-10'/%3E%3C/svg%3E") center/12px no-repeat;border-color:var(--accent2)}
+.selbar{position:fixed;left:50%;bottom:26px;z-index:250;display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;max-width:calc(100vw - 16px);padding:8px 10px 8px 18px;background:#0f1330;color:#fff;border-radius:99px;box-shadow:0 20px 44px -12px rgba(0,0,0,.6);animation:selin .25s ease both}
+.selbar .n{font-weight:700;font-size:13px;margin-right:4px}
+.selbar button{width:auto;margin:0;padding:6px 14px;font-size:13px;background:rgba(255,255,255,.14);box-shadow:none;border-radius:99px}
+.selbar button:hover:not(:disabled){background:rgba(255,255,255,.26);transform:none;box-shadow:none;filter:none}
+.selbar button.danger{background:linear-gradient(135deg,#e11d48,#f43f5e)}
+.selbar button.danger:hover:not(:disabled){filter:brightness(1.1);background:linear-gradient(135deg,#e11d48,#f43f5e)}
+@keyframes selin{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+@media (max-width:820px){.selbar{bottom:92px}}
 </style>
 </head>
 <body>
@@ -312,7 +400,7 @@ html[data-theme=dark] .bubble.recv{box-shadow:none}
   <section id="admin" hidden>
     <div class="top">
       <div class="brand"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg><div><h1>Feedback<span> Platform</span></h1><div class="sub">Espace administrateur · <span id="adminWho"></span></div></div></div>
-      <div class="right"><button type="button" class="themebtn" aria-label="Mode sombre">Sombre</button><button class="logout">Se déconnecter</button></div>
+      <div class="right"><button type="button" class="rfbtn" id="refreshAdmin" title="Actualiser" aria-label="Actualiser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>Actualiser</button><button type="button" class="themebtn" aria-label="Mode sombre">Sombre</button><button class="logout">Se déconnecter</button></div>
     </div>
 
     <nav class="tabs" role="tablist" aria-label="Sections">
@@ -344,7 +432,8 @@ html[data-theme=dark] .bubble.recv{box-shadow:none}
         <label for="target">Destinataire (un agent, un modèle ou tous)</label>
         <select id="target"></select>
         <label for="message">Message</label>
-        <textarea id="message"></textarea>
+        <textarea id="message" placeholder="Entrée pour envoyer · Maj+Entrée pour un retour à la ligne"></textarea>
+        <div id="adminVoice"></div>
         <label for="adminImg">Image (optionnel)</label>
         <input id="adminImg" type="file" accept="image/*">
         <img id="adminPrev" class="preview" alt="Aperçu" hidden>
@@ -430,6 +519,8 @@ html[data-theme=dark] .bubble.recv{box-shadow:none}
     <div class="top">
       <div class="brand"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg><div><h1>Feedback<span> Platform</span></h1><div class="sub">Mon espace · <span id="agentWho"></span> <span class="pstat on" id="myStatus" hidden>Actif</span></div></div></div>
       <div class="right">
+        <button type="button" class="rfbtn" id="refreshAgent" title="Actualiser" aria-label="Actualiser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>Actualiser</button>
+        <button type="button" class="rfbtn selToggle" id="selAgent" hidden>Sélectionner</button>
         <button type="button" class="themebtn" aria-label="Mode sombre">Sombre</button>
         <div id="pwdChange" hidden><button type="button" id="pwdChangeBtn">Changer mon mot de passe</button></div>
         <button class="logout">Se déconnecter</button>
@@ -445,7 +536,8 @@ html[data-theme=dark] .bubble.recv{box-shadow:none}
       <button type="button" id="composeOpen">Envoyer un feedback</button>
       <div id="composeBox" class="card" hidden style="margin-bottom:12px">
         <label for="composeText">Votre feedback à l'administrateur</label>
-        <textarea id="composeText"></textarea>
+        <textarea id="composeText" placeholder="Entrée pour envoyer · Maj+Entrée pour un retour à la ligne"></textarea>
+        <div id="composeVoice"></div>
         <label for="composeImg">Image (optionnel)</label>
         <input id="composeImg" type="file" accept="image/*">
         <img id="composePrev" class="preview" alt="Aperçu" hidden>
@@ -470,6 +562,330 @@ html[data-theme=dark] .bubble.recv{box-shadow:none}
 </main>
 
 <script>
+/* ---------- Outils communs : notification, menu clic droit, aperçu photo (zoom), message vocal ---------- */
+function toast(text) {
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.classList.add("out"), 1800);
+  setTimeout(() => t.remove(), 2200);
+}
+
+/* Menu contextuel (clic droit, ou touche « menu » / Maj+F10 du clavier) */
+let menuEl = null;
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+function menuPos(ev, el) {
+  if (ev.clientX || ev.clientY) return [ev.clientX, ev.clientY]; // déclenché au clavier : pas de coordonnées
+  const r = el.getBoundingClientRect();
+  return [r.left + 24, r.top + 24];
+}
+function showMenu(x, y, items) {
+  closeMenu();
+  const m = document.createElement("div");
+  m.className = "ctxm";
+  m.setAttribute("role", "menu");
+  items.forEach(it => {
+    if (it === "-") { m.appendChild(document.createElement("hr")); return; }
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "menuitem");
+    if (it.danger) b.className = "danger";
+    const l = document.createElement("span");
+    l.textContent = it.label;
+    b.appendChild(l);
+    if (it.key) { const k = document.createElement("kbd"); k.textContent = it.key; b.appendChild(k); }
+    b.addEventListener("click", ev => { ev.stopPropagation(); closeMenu(); it.fn(); });
+    m.appendChild(b);
+  });
+  m.addEventListener("keydown", ev => {
+    const bs = [...m.querySelectorAll("button")], i = bs.indexOf(document.activeElement);
+    if (ev.key === "ArrowDown") { ev.preventDefault(); bs[(i + 1) % bs.length].focus(); }
+    else if (ev.key === "ArrowUp") { ev.preventDefault(); bs[(i - 1 + bs.length) % bs.length].focus(); }
+  });
+  document.body.appendChild(m);
+  m.style.left = Math.max(8, Math.min(x, innerWidth - m.offsetWidth - 8)) + "px";
+  m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + "px";
+  menuEl = m;
+  const first = m.querySelector("button");
+  if (first) first.focus();
+}
+document.addEventListener("click", closeMenu);
+document.addEventListener("scroll", closeMenu, true);
+window.addEventListener("resize", closeMenu);
+document.addEventListener("keydown", e => { if (e.key === "Escape" && menuEl) { e._menuClosed = true; closeMenu(); } }, true);
+
+/* Images : télécharger, copier, ouvrir */
+async function imgBlob(src) {
+  const r = await fetch(src);
+  if (!r.ok) throw new Error("http " + r.status);
+  return r.blob();
+}
+async function downloadImage(src) {
+  try {
+    const b = await imgBlob(src);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(b);
+    a.download = decodeURIComponent(src.split("/").pop().split("?")[0]) || "image";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  } catch (e) { window.open(src, "_blank", "noopener"); }
+}
+async function copyImage(src) {
+  try {
+    let b = await imgBlob(src);
+    if (b.type !== "image/png") {
+      const bmp = await createImageBitmap(b), c = document.createElement("canvas");
+      c.width = bmp.width; c.height = bmp.height;
+      c.getContext("2d").drawImage(bmp, 0, 0);
+      b = await new Promise(res => c.toBlob(res, "image/png"));
+    }
+    await navigator.clipboard.write([new ClipboardItem({ "image/png": b })]);
+    toast("Image copiée");
+  } catch (e) { toast("Copie impossible"); }
+}
+function imageMenuBase(src) {
+  return [
+    { label: "Télécharger l'image", fn: () => downloadImage(src) },
+    { label: "Copier l'image", fn: () => copyImage(src) },
+    { label: "Ouvrir dans un nouvel onglet", fn: () => window.open(src, "_blank", "noopener") }
+  ];
+}
+function imageMenu(src) { return [{ label: "Agrandir", fn: () => openLightbox(src) }, ...imageMenuBase(src)]; }
+
+/* Aperçu plein écran : boutons +/−, molette, glisser, double-clic, raccourcis clavier */
+const LB = { el: null, img: null, stage: null, lvl: null, z: 1, x: 0, y: 0, src: "" };
+const Z_MIN = 0.25, Z_MAX = 8;
+const lbOpen = () => !!(LB.el && LB.el.classList.contains("open"));
+function lbApply() {
+  LB.img.style.transform = `translate(${LB.x}px,${LB.y}px) scale(${LB.z})`;
+  LB.lvl.textContent = Math.round(LB.z * 100) + " %";
+}
+function lbZoom(f, cx, cy) {
+  const nz = Math.min(Z_MAX, Math.max(Z_MIN, LB.z * f));
+  if (nz === LB.z) return;
+  const k = nz / LB.z;
+  if (cx != null) { // le point sous le curseur reste fixe
+    const r = LB.stage.getBoundingClientRect(), ox = cx - (r.left + r.width / 2), oy = cy - (r.top + r.height / 2);
+    LB.x = ox - (ox - LB.x) * k;
+    LB.y = oy - (oy - LB.y) * k;
+  } else { LB.x *= k; LB.y *= k; }
+  LB.z = nz;
+  lbApply();
+}
+function lbReset() { LB.z = 1; LB.x = 0; LB.y = 0; lbApply(); }
+function lbActual() {
+  const nw = LB.img.naturalWidth, w = LB.img.offsetWidth;
+  if (!nw || !w) return;
+  LB.z = Math.min(Z_MAX, nw / w); LB.x = 0; LB.y = 0;
+  lbApply();
+}
+function lbClose() {
+  if (!LB.el) return;
+  LB.el.classList.remove("open");
+  LB.img.removeAttribute("src");
+}
+function lbMenu(x, y) {
+  showMenu(x, y, [
+    { label: "Zoom avant", key: "+", fn: () => lbZoom(1.4) },
+    { label: "Zoom arrière", key: "−", fn: () => lbZoom(1 / 1.4) },
+    { label: "Ajuster à l'écran", key: "0", fn: lbReset },
+    { label: "Taille réelle", key: "1", fn: lbActual },
+    "-",
+    ...imageMenuBase(LB.src),
+    "-",
+    { label: "Fermer", key: "Échap", fn: lbClose }
+  ]);
+}
+function buildLightbox() {
+  const el = document.createElement("div");
+  el.className = "lb";
+  el.setAttribute("role", "dialog");
+  el.setAttribute("aria-label", "Aperçu de la photo");
+  const bar = document.createElement("div");
+  bar.className = "bar";
+  const mk = (label, title, fn) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label; b.title = title;
+    b.addEventListener("click", ev => { ev.stopPropagation(); fn(); });
+    return b;
+  };
+  const lvl = document.createElement("span");
+  lvl.className = "lvl";
+  bar.append(
+    mk("−", "Zoom arrière (−)", () => lbZoom(1 / 1.4)), lvl, mk("+", "Zoom avant (+)", () => lbZoom(1.4)),
+    mk("Ajuster", "Ajuster à l'écran (0)", lbReset), mk("100 %", "Taille réelle (1)", lbActual),
+    mk("Télécharger", "Télécharger l'image", () => downloadImage(LB.src)), mk("Fermer", "Fermer (Échap)", lbClose)
+  );
+  const stage = document.createElement("div");
+  stage.className = "stage";
+  const img = document.createElement("img");
+  img.alt = "Photo agrandie";
+  img.draggable = false;
+  stage.appendChild(img);
+  el.append(bar, stage);
+  document.body.appendChild(el);
+  Object.assign(LB, { el, img, stage, lvl });
+
+  stage.addEventListener("wheel", ev => { ev.preventDefault(); lbZoom(ev.deltaY < 0 ? 1.15 : 1 / 1.15, ev.clientX, ev.clientY); }, { passive: false });
+  let drag = null;
+  stage.addEventListener("pointerdown", ev => {
+    if (ev.button !== 0) return;
+    drag = { sx: ev.clientX, sy: ev.clientY, x: LB.x, y: LB.y, moved: false, onImg: ev.target === img };
+    stage.setPointerCapture(ev.pointerId);
+    stage.classList.add("drag");
+  });
+  stage.addEventListener("pointermove", ev => {
+    if (!drag) return;
+    const dx = ev.clientX - drag.sx, dy = ev.clientY - drag.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
+    LB.x = drag.x + dx; LB.y = drag.y + dy;
+    lbApply();
+  });
+  stage.addEventListener("pointerup", () => {
+    const d = drag;
+    drag = null;
+    stage.classList.remove("drag");
+    if (d && !d.moved && !d.onImg) lbClose(); // clic sur le fond = fermer
+  });
+  stage.addEventListener("dblclick", ev => {
+    if (ev.target !== img) return;
+    if (LB.z > 1.01) lbReset(); else lbZoom(2.5, ev.clientX, ev.clientY);
+  });
+  el.addEventListener("contextmenu", ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const [x, y] = menuPos(ev, img);
+    lbMenu(x, y);
+  });
+}
+function openLightbox(src) {
+  if (!LB.el) buildLightbox();
+  LB.src = src;
+  LB.img.src = src;
+  lbReset();
+  LB.el.classList.add("open");
+}
+document.addEventListener("keydown", ev => {
+  if (!lbOpen() || ev._menuClosed) return;
+  if (ev.key === "Escape") lbClose();
+  else if (ev.key === "+" || ev.key === "=") lbZoom(1.25);
+  else if (ev.key === "-" || ev.key === "_") lbZoom(1 / 1.25);
+  else if (ev.key === "0") lbReset();
+  else if (ev.key === "1") lbActual();
+  else return;
+  ev.preventDefault();
+});
+/* Rend une image cliquable (agrandir) et, si demandé, ajoute son menu clic droit */
+function bindImage(img, src, withMenu) {
+  img.title = "Cliquer pour agrandir · clic droit pour les options";
+  img.style.cursor = "zoom-in";
+  img.addEventListener("click", ev => {
+    if (document.body.classList.contains("selecting")) return; // en sélection, le clic coche le message
+    ev.stopPropagation();
+    openLightbox(src || img.currentSrc || img.src);
+  });
+  if (withMenu) img.addEventListener("contextmenu", ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const [x, y] = menuPos(ev, img);
+    showMenu(x, y, imageMenu(src || img.currentSrc || img.src));
+  });
+}
+
+/* Message vocal : enregistrer, réécouter, supprimer avant envoi */
+const MAX_REC = 300; // 5 minutes
+const recs = new Set();
+const recActive = () => { let on = false; recs.forEach(r => { if (!r.el.isConnected) { recs.delete(r); if (r.state() === "rec") r.reset(); } else if (r.state() !== "idle") on = true; }); return on; };
+function voiceRecorder(onChange) {
+  const el = document.createElement("div");
+  el.className = "voice";
+  let mr = null, stream = null, tick = null, t0 = 0, chunks = [], blob = null, url = null, state = "idle", cancelled = false, timerEl = null, msg = "";
+  const mk = (label, cls, fn) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.textContent = label; b.className = cls;
+    b.addEventListener("click", ev => { ev.stopPropagation(); fn(); });
+    return b;
+  };
+  const fmtT = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+  function draw() {
+    el.replaceChildren();
+    timerEl = null;
+    if (state === "idle") {
+      el.appendChild(mk("Message vocal", "mic", start));
+    } else if (state === "rec") {
+      const dot = document.createElement("i");
+      dot.className = "recdot";
+      timerEl = document.createElement("span");
+      timerEl.className = "timer";
+      timerEl.textContent = fmtT((Date.now() - t0) / 1000);
+      el.append(dot, timerEl, mk("Terminer", "stop", stop), mk("Annuler", "plain", cancel));
+    } else {
+      const a = document.createElement("audio");
+      a.controls = true; a.src = url; a.preload = "metadata";
+      el.append(a, mk("Supprimer le vocal", "plain", reset));
+    }
+    if (msg) {
+      const n = document.createElement("span");
+      n.style.cssText = "font-size:12px;font-weight:500;color:var(--alert)";
+      n.textContent = msg;
+      el.appendChild(n);
+    }
+  }
+  async function start() {
+    msg = "";
+    if (!navigator.mediaDevices || !window.MediaRecorder) { msg = "Enregistrement vocal indisponible ici."; draw(); return; }
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (e) { msg = "Micro inaccessible : autorisez-le puis réessayez."; draw(); return; }
+    const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(t => MediaRecorder.isTypeSupported(t)) || "";
+    chunks = []; cancelled = false;
+    mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+    mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    mr.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearInterval(tick);
+      if (cancelled || !chunks.length) { state = "idle"; blob = null; }
+      else {
+        blob = new Blob(chunks, { type: (mr.mimeType || type || "audio/webm").split(";")[0] });
+        url = URL.createObjectURL(blob);
+        state = "ready";
+      }
+      draw();
+      if (onChange) onChange();
+    };
+    mr.start();
+    t0 = Date.now();
+    state = "rec";
+    draw();
+    tick = setInterval(() => {
+      const s = (Date.now() - t0) / 1000;
+      if (timerEl) timerEl.textContent = fmtT(s);
+      if (s >= MAX_REC) stop();
+    }, 250);
+  }
+  function stop() { if (mr && mr.state !== "inactive") mr.stop(); }
+  function cancel() { cancelled = true; stop(); }
+  function reset() {
+    if (state === "rec") { cancel(); return; }
+    if (url) URL.revokeObjectURL(url);
+    blob = null; url = null; state = "idle"; msg = "";
+    draw();
+    if (onChange) onChange();
+  }
+  draw();
+  const api = { el, blob: () => blob, busy: () => state === "rec", state: () => state, reset };
+  recs.add(api);
+  return api;
+}
+
+/* Vocal : reconnu à son nom de fichier « vocal-… » */
+const isAudio = u => /\/vocal-[^/?#]*$/.test(u || "");
+function audioEl(url) {
+  const a = document.createElement("audio");
+  a.controls = true; a.preload = "none"; a.src = url;
+  return a;
+}
+
 const SUPABASE_URL = "https://mzjiyusbgtslfzchoykf.supabase.co";
 const SUPABASE_KEY = "sb_publishable_6JGumr_7n73O3U6MjRdgkw_5mZH46cc";
 const BUCKET = "feedback-images";
@@ -639,6 +1055,7 @@ async function uploadImage(file) {
   return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 function bindPreview(input, img) {
+  bindImage(img, null, true);
   input.addEventListener("change", () => {
     const f = input.files[0];
     if (img.src && img.src.startsWith("blob:")) URL.revokeObjectURL(img.src);
@@ -652,8 +1069,8 @@ function clearFile(input, img) {
   img.hidden = true;
 }
 
-/* Bulle de message : kind = "sent" (bleu) ou "recv" (gris) */
-function bubble(kind, metaText, text, imageUrl) {
+/* Bulle de message : kind = "sent" (bleu) ou "recv" (gris). opts = actions possibles (modifier, sélectionner, supprimer) */
+function bubble(kind, metaText, text, imageUrl, opts) {
   const b = document.createElement("div");
   b.className = "bubble " + kind;
   const meta = document.createElement("div");
@@ -667,19 +1084,259 @@ function bubble(kind, metaText, text, imageUrl) {
     b.appendChild(t);
   }
   if (imageUrl) {
-    const a = document.createElement("a");
-    a.href = imageUrl; a.target = "_blank"; a.rel = "noopener";
-    a.addEventListener("click", e => e.stopPropagation());
-    const img = document.createElement("img");
-    img.src = imageUrl; img.alt = "Image jointe"; img.loading = "lazy";
-    a.appendChild(img);
-    b.appendChild(a);
+    if (isAudio(imageUrl)) b.appendChild(audioEl(imageUrl));
+    else {
+      const img = document.createElement("img");
+      img.src = imageUrl; img.alt = "Image jointe"; img.loading = "lazy";
+      bindImage(img, imageUrl, true); // clic = agrandir, clic droit = options
+      b.appendChild(img);
+    }
   }
+  if (opts) msgActions(b, text, imageUrl, opts);
   return b;
+}
+
+/* ---------- Messages : modifier, sélectionner, supprimer (un ou plusieurs) ---------- */
+const TABLES = { fb: "feedbacks", rp: "reponses", msg: "messages" };
+const isAdmin = () => !$("admin").hidden;
+const picked = new Set(), selData = new Map();
+let selBar = null, paintT = null;
+const selecting = () => document.body.classList.contains("selecting");
+const selKeys = () => [...document.querySelectorAll("[data-sk]")].map(e => e.dataset.sk);
+const pickedItems = () => selKeys().filter(k => picked.has(k)).map(k => selData.get(k)).filter(Boolean);
+function schedulePaint() { clearTimeout(paintT); paintT = setTimeout(paintSel, 0); }
+
+function paintSel() {
+  document.querySelectorAll("[data-sk]").forEach(e => e.classList.toggle("picked", picked.has(e.dataset.sk)));
+  document.querySelectorAll(".selToggle").forEach(b => { b.textContent = selecting() ? "Annuler la sélection" : "Sélectionner"; });
+  if (!selBar) buildSelBar();
+  selBar.el.hidden = !selecting();
+  if (!selecting()) return;
+  const keys = selKeys(), n = keys.filter(k => picked.has(k)).length;
+  selBar.n.textContent = n ? n + " sélectionné" + (n > 1 ? "s" : "") : "Aucun message sélectionné";
+  selBar.del.disabled = !n;
+  selBar.del.textContent = n ? "Supprimer (" + n + ")" : "Supprimer";
+  selBar.all.disabled = !keys.length;
+  selBar.all.textContent = keys.length && n === keys.length ? "Tout désélectionner" : "Tout sélectionner";
+}
+function buildSelBar() {
+  const el = document.createElement("div");
+  el.className = "selbar";
+  el.hidden = true;
+  const n = document.createElement("span");
+  n.className = "n";
+  const mkb = (cls, fn) => { const b = document.createElement("button"); b.type = "button"; if (cls) b.className = cls; b.addEventListener("click", fn); return b; };
+  const all = mkb("", () => {
+    const keys = selKeys(), every = keys.length && keys.every(k => picked.has(k));
+    keys.forEach(k => every ? picked.delete(k) : picked.add(k));
+    paintSel();
+  });
+  const del = mkb("danger", () => deleteItems(pickedItems()));
+  const cancel = mkb("", exitSelect);
+  cancel.textContent = "Annuler";
+  el.append(n, all, del, cancel);
+  document.body.appendChild(el);
+  selBar = { el, n, all, del };
+}
+function enterSelect(key) { document.body.classList.add("selecting"); if (key) picked.add(key); paintSel(); }
+function exitSelect() {
+  if (!selecting() && !picked.size) return;
+  document.body.classList.remove("selecting");
+  picked.clear();
+  paintSel();
+}
+function toggleSelect() { selecting() ? exitSelect() : enterSelect(); }
+function toggleKey(k) { picked.has(k) ? picked.delete(k) : picked.add(k); paintSel(); }
+function selectBtn() {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "rfbtn selToggle";
+  b.textContent = selecting() ? "Annuler la sélection" : "Sélectionner";
+  b.addEventListener("click", toggleSelect);
+  return b;
+}
+// En mode sélection, un clic sur un message le coche (et ne déclenche rien d'autre)
+document.addEventListener("click", ev => {
+  if (!selecting()) return;
+  const b = ev.target.closest(".bubble");
+  if (!b) return;
+  closeMenu();
+  ev.preventDefault(); ev.stopPropagation();
+  if (b.dataset.sk) toggleKey(b.dataset.sk);
+}, true);
+document.addEventListener("keydown", ev => {
+  if (!selecting() || ev._menuClosed || lbOpen()) return;
+  if (ev.key === "Escape") { ev.preventDefault(); exitSelect(); return; }
+  if (/^(TEXTAREA|INPUT|SELECT)$/.test(ev.target.tagName)) return;
+  if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "a") { ev.preventDefault(); selKeys().forEach(k => picked.add(k)); paintSel(); }
+  else if (ev.key === "Delete") { const items = pickedItems(); if (items.length) { ev.preventDefault(); deleteItems(items); } }
+});
+
+async function copyText(t) {
+  try { await navigator.clipboard.writeText(t); toast("Texte copié"); } catch (e) { toast("Copie impossible"); }
+}
+function actBtn(label, fn) {
+  const x = document.createElement("button");
+  x.type = "button";
+  x.textContent = label;
+  x.addEventListener("click", ev => { ev.stopPropagation(); fn(); });
+  return x;
+}
+function msgMenu(b, text, imageUrl, o) {
+  const sk = b.dataset.sk, items = [];
+  if (selecting()) {
+    if (sk) items.push({ label: picked.has(sk) ? "Désélectionner" : "Sélectionner", fn: () => toggleKey(sk) });
+    items.push({ label: "Quitter la sélection", key: "Échap", fn: exitSelect });
+    return items;
+  }
+  if (text) items.push({ label: "Copier le texte", fn: () => copyText(text) });
+  if (imageUrl && isAudio(imageUrl)) items.push({ label: "Télécharger le vocal", fn: () => downloadImage(imageUrl) });
+  else if (imageUrl) items.push({ label: "Agrandir la photo", fn: () => openLightbox(imageUrl) }, { label: "Télécharger la photo", fn: () => downloadImage(imageUrl) });
+  if (o.canEdit) items.push({ label: "Modifier", key: "F2", fn: () => startEdit(b, text, o) });
+  if (sk) { if (items.length) items.push("-"); items.push({ label: "Sélectionner", fn: () => enterSelect(sk) }); }
+  if (o.canDelete) items.push({ label: "Supprimer", key: "Suppr", danger: true, fn: () => deleteItems([o]) });
+  return items;
+}
+function msgActions(b, text, imageUrl, o) {
+  b.tabIndex = 0;
+  const key = o.type + ":" + o.id;
+  o.hasFile = !!imageUrl;
+  if (o.canDelete) {
+    b.dataset.sk = key;
+    selData.set(key, o);
+    if (picked.has(key)) b.classList.add("picked");
+    schedulePaint();
+  } else b.dataset.nosel = "1";
+  if (o.canEdit || o.canDelete) {
+    const acts = document.createElement("div");
+    acts.className = "acts";
+    if (o.canEdit) acts.appendChild(actBtn("Modifier", () => startEdit(b, text, o)));
+    if (o.canDelete) acts.appendChild(actBtn("Supprimer", () => deleteItems([o])));
+    b.appendChild(acts);
+  }
+  b.addEventListener("contextmenu", ev => {
+    if (ev.target.closest("textarea")) return; // menu natif dans la zone de modification
+    ev.preventDefault();
+    const [x, y] = menuPos(ev, b);
+    const items = msgMenu(b, text, imageUrl, o);
+    if (items.length) showMenu(x, y, items);
+  });
+  b.addEventListener("keydown", ev => {
+    if (ev.target !== b) return;
+    if (selecting()) { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); if (b.dataset.sk) toggleKey(b.dataset.sk); } return; }
+    if (ev.key === "Delete" && o.canDelete) { ev.preventDefault(); deleteItems([o]); }
+    else if (ev.key === "F2" && o.canEdit) { ev.preventDefault(); startEdit(b, text, o); }
+  });
+}
+
+/* Modification d'un message : Entrée enregistre, Maj+Entrée = ligne, Échap annule */
+function startEdit(b, text, o) {
+  if (b.querySelector(".editbox")) return;
+  closeMenu();
+  const old = b.querySelector(".txt");
+  if (old) old.hidden = true;
+  b.style.width = "min(100%,480px)";
+  const box = document.createElement("div");
+  box.className = "editbox";
+  box.addEventListener("click", ev => ev.stopPropagation());
+  const ta = document.createElement("textarea");
+  ta.value = text || "";
+  const note = document.createElement("div");
+  note.className = "editnote";
+  const row = document.createElement("div");
+  row.className = "row";
+  const mkb = (label, cls, fn) => { const x = document.createElement("button"); x.type = "button"; x.textContent = label; if (cls) x.className = cls; x.addEventListener("click", ev => { ev.stopPropagation(); fn(); }); return x; };
+  const close = () => { box.remove(); if (old) old.hidden = false; b.style.width = ""; };
+  let busy = false;
+  async function go() {
+    if (busy) return;
+    const t = ta.value.trim();
+    if (!t && !o.hasFile) { note.textContent = "Le message ne peut pas être vide."; return; }
+    if (t === (text || "")) { close(); return; }
+    busy = true; save.disabled = true; note.textContent = "";
+    try { await o.onEdit(t); }
+    catch (e) { note.textContent = "Modification impossible : " + e.message; busy = false; save.disabled = false; }
+  }
+  const save = mkb("Enregistrer", "go", go);
+  const hint = document.createElement("span");
+  hint.className = "hint";
+  hint.textContent = "Entrée : enregistrer · Échap : annuler";
+  row.append(save, mkb("Annuler", "", close), hint);
+  ta.addEventListener("keydown", ev => {
+    ev.stopPropagation();
+    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); go(); }
+    else if (ev.key === "Escape") { ev.preventDefault(); close(); }
+  });
+  box.append(ta, note, row);
+  b.insertBefore(box, old ? old.nextSibling : b.querySelector(".meta").nextSibling);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+}
+async function reloadViews() {
+  if (isAdmin()) await loadHistory();
+  else { await loadMine(); if (atab === "chat") await loadChat(); }
+}
+async function saveEdit(type, id, text) {
+  const { data, error } = await db.from(TABLES[type]).update({ message: text }).eq("id", id).select("id");
+  if (error || !data || !data.length) throw new Error(error ? error.message : "droits manquants (voir le script SQL)");
+  await reloadViews();
+}
+
+/* Suppression d'un ou de plusieurs messages (un feedback supprimé emporte ses réponses) */
+async function deleteItems(items) {
+  items = (items || []).filter(Boolean);
+  if (!items.length) return;
+  const n = items.length, hasFb = items.some(i => i.type === "fb");
+  const q = (n === 1 ? "Supprimer ce message ?" : `Supprimer ces ${n} messages ?`) +
+    (hasFb ? "\nLes réponses d'un feedback supprimé sont supprimées avec lui." : "") + "\nCette action est définitive.";
+  if (!confirm(q)) return;
+  const fbIds = items.filter(i => i.type === "fb").map(i => i.id);
+  const rpIds = items.filter(i => i.type === "rp" && !fbIds.includes(i.parent)).map(i => i.id);
+  const msgIds = items.filter(i => i.type === "msg").map(i => i.id);
+  const ok = new Set();
+  let fail = 0, err = "";
+  const run = async (table, ids, type) => {
+    if (!ids.length) return;
+    const { data, error } = await db.from(table).delete().in("id", ids).select("id");
+    if (error) { err = error.message; fail += ids.length; return; }
+    const got = new Set((data || []).map(r => r.id));
+    ids.forEach(id => got.has(id) ? ok.add(type + ":" + id) : fail++);
+  };
+  if (fbIds.length) await db.from("reponses").delete().in("feedback_id", fbIds);
+  await run("feedbacks", fbIds, "fb");
+  await run("reponses", rpIds, "rp");
+  await run("messages", msgIds, "msg");
+  await removeFiles(items.filter(i => ok.has(i.type + ":" + i.id)).flatMap(i => i.files || []));
+  exitSelect();
+  if (fail) alert(`${fail} message${fail > 1 ? "s n'ont" : " n'a"} pas pu être supprimé${fail > 1 ? "s" : ""}` + (err ? " : " + err : " (droits manquants, voir le script SQL)."));
+  else toast(n > 1 ? n + " messages supprimés" : "Message supprimé");
+  await reloadViews();
+}
+
+/* ---------- Actualiser ---------- */
+function bindRefresh(btn, fn) {
+  btn.addEventListener("click", async () => {
+    if (btn.classList.contains("busy")) return;
+    btn.classList.add("busy"); btn.disabled = true;
+    try { await fn(); toast("Actualisé"); } catch (e) { toast("Actualisation impossible"); }
+    btn.classList.remove("busy"); btn.disabled = false;
+  });
+}
+
+/* Vocal : envoi dans le même espace de stockage que les images (nom « vocal-… », reconnu à l'affichage) */
+async function uploadAudio(blob) {
+  if (!blob) return null;
+  if (blob.size > MAX_IMG) throw new Error("Vocal trop lourd (5 Mo maximum).");
+  const ext = /mp4/.test(blob.type) ? "m4a" : /ogg/.test(blob.type) ? "ogg" : "webm";
+  const path = `${uid}/vocal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const { error } = await db.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || "audio/webm" });
+  if (error) throw new Error(error.message);
+  return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
 /* ---------- Onglets admin ---------- */
 function setTab(name) {
+  exitSelect();
   tab = name;
   document.querySelectorAll("#admin .tabs button").forEach(b => {
     const on = b.dataset.tab === name;
@@ -762,6 +1419,7 @@ async function route() {
   myModele = p.modele || null;
   $("composeWrap").hidden = true;
   $("agentTabs").hidden = true;
+  $("selAgent").hidden = true;
   $("pwdChange").hidden = true;
   $("agentPwdMsg").textContent = "";
   $("apChat").hidden = true;
@@ -799,12 +1457,13 @@ async function route() {
     show("agent");
     $("composeWrap").hidden = false;
     $("agentTabs").hidden = false;
+    $("selAgent").hidden = false;
     $("pwdChange").hidden = false;
     buildChatCompose();
     setATab(atab);
     await loadMine();
     await checkNotifs();
-    timer = setInterval(() => { loadMine(true); checkNotifs(); if (atab === "chat") loadChat(); }, 30000);
+    timer = setInterval(() => { loadMine(true); checkNotifs(); if (atab === "chat") loadChat(true); }, 30000);
   }
 }
 
@@ -916,6 +1575,7 @@ $("reset").addEventListener("submit", async e => {
 });
 
 document.querySelectorAll(".logout").forEach(b => b.addEventListener("click", async () => {
+  exitSelect();
   clearInterval(timer);
   await stopPresence(); // l'utilisateur passe « Hors ligne » immédiatement
   window.native?.unread(0);
@@ -1255,39 +1915,16 @@ async function loadPending() {
   });
 }
 
-/* ---------- Suppression (admin) ---------- */
-function delLink(text, handler) {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = "del";
-  b.textContent = text;
-  b.addEventListener("click", ev => { ev.stopPropagation(); handler(b); });
-  return b;
-}
+/* ---------- Suppression : fichiers du stockage ---------- */
 async function removeFiles(urls) {
   const marker = "/" + BUCKET + "/";
   const paths = urls.filter(Boolean).map(u => u.includes(marker) ? decodeURIComponent(u.split(marker)[1].split("?")[0]) : null).filter(Boolean);
   if (paths.length) await db.storage.from(BUCKET).remove(paths);
 }
-async function removeFeedback(f, reps) {
-  if (!confirm("Supprimer ce feedback et toutes ses réponses ?\nCette action est définitive.")) return;
-  await db.from("reponses").delete().eq("feedback_id", f.id);
-  const { data, error } = await db.from("feedbacks").delete().eq("id", f.id).select("id");
-  if (error || !data || !data.length) { alert("Suppression impossible" + (error ? " : " + error.message : " (droits manquants, voir le script SQL).")); return; }
-  await removeFiles([f.image_url, ...reps.map(r => r.image_url)]);
-  await loadHistory();
-}
-async function removeReply(r) {
-  if (!confirm("Supprimer cette réponse ?\nCette action est définitive.")) return;
-  const { data, error } = await db.from("reponses").delete().eq("id", r.id).select("id");
-  if (error || !data || !data.length) { alert("Suppression impossible" + (error ? " : " + error.message : " (droits manquants, voir le script SQL).")); return; }
-  await removeFiles([r.image_url]);
-  await loadHistory();
-}
 
 /* ---------- Discussions : éléments communs (admin et agent) ---------- */
 // Bulles d'une discussion. viewerIsAgent = true côté agent. Un message est « de l'agent » si son auteur est l'agent.
-function chatBubbles(msgs, viewerIsAgent, otherName, onDelete) {
+function chatBubbles(msgs, viewerIsAgent, otherName) {
   const log = document.createElement("div");
   log.className = "chatlog";
   let last = "";
@@ -1303,14 +1940,16 @@ function chatBubbles(msgs, viewerIsAgent, otherName, onDelete) {
     }
     const fromAgent = m.auteur_id === m.agent_id;
     const mine = viewerIsAgent ? fromAgent : !fromAgent;
-    const b = bubble(mine ? "sent" : "recv", (mine ? "Vous" : otherName) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), m.message, m.image_url);
-    if (onDelete) b.appendChild(delLink("Supprimer", () => onDelete(m)));
-    log.appendChild(b);
+    const own = m.auteur_id === uid;
+    log.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : otherName) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), m.message, m.image_url, {
+      type: "msg", id: m.id, files: [m.image_url].filter(Boolean),
+      canEdit: own, canDelete: own || isAdmin(), onEdit: t => saveEdit("msg", m.id, t)
+    }));
   });
   return log;
 }
 
-// Zone d'écriture : Entrée envoie, Maj+Entrée = nouvelle ligne
+// Zone d'écriture : Entrée envoie, Maj+Entrée = nouvelle ligne. Photo ou message vocal en pièce jointe.
 function composer(placeholder, onSend) {
   const box = document.createElement("div");
   box.className = "composer";
@@ -1321,18 +1960,22 @@ function composer(placeholder, onSend) {
   const prev = document.createElement("img");
   prev.className = "preview"; prev.alt = "Aperçu"; prev.hidden = true;
   bindPreview(fi, prev);
+  const rec = voiceRecorder();
   const btn = document.createElement("button");
   btn.type = "button";
   btn.textContent = "Envoyer";
   const note = document.createElement("p");
   note.className = "msg err";
   async function go() {
-    const message = ta.value.trim(), file = fi.files[0];
-    if (!message && !file) return;
+    if (btn.disabled) return;
+    const message = ta.value.trim(), file = fi.files[0], blob = rec.blob();
+    if (rec.busy()) { note.textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
+    if (!message && !file && !blob) return;
+    if (file && blob) { note.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
     btn.disabled = true;
     note.textContent = "";
     try {
-      const image_url = await uploadImage(file);
+      const image_url = blob ? await uploadAudio(blob) : await uploadImage(file);
       await onSend(message, image_url);
     } catch (e) {
       note.textContent = "Envoi impossible : " + e.message;
@@ -1342,13 +1985,14 @@ function composer(placeholder, onSend) {
     btn.disabled = false;
     ta.value = "";
     clearFile(fi, prev);
+    rec.reset();
   }
   btn.addEventListener("click", ev => { ev.stopPropagation(); go(); });
   ta.addEventListener("keydown", ev => {
     ev.stopPropagation();
-    if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); go(); }
+    if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); go(); }
   });
-  box.append(ta, fi, prev, btn, note);
+  box.append(ta, fi, prev, rec.el, btn, note);
   return box;
 }
 
@@ -1356,7 +2000,7 @@ function composer(placeholder, onSend) {
 let store = [], chatStore = [], chatErr = "", view = { agent: null, v: "all", q: "", s: "fb" };
 const unreadOf = f => (f.origine === "agent" && f.lu_admin === false ? 1 : 0) + (f.reponses || []).filter(r => !r.lu_admin).length;
 const chatUnread = id => chatStore.filter(m => m.agent_id === id && !m.lu_admin).length;
-const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement);
+const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement) || recActive();
 
 function recount() {
   const total = store.reduce((n, f) => n + unreadOf(f), 0) + chatStore.filter(m => !m.lu_admin).length;
@@ -1369,7 +2013,7 @@ function recount() {
 async function loadHistory(auto = false) {
   const [fb, ch] = await Promise.all([
     db.from("feedbacks")
-      .select("id,message,image_url,modele,lu,origine,lu_admin,created_at,agent_id,agent:profiles!feedbacks_agent_id_fkey(nom,modele),reponses(id,message,image_url,created_at,lu_admin,auteur_id)")
+      .select("id,message,image_url,modele,lu,origine,lu_admin,created_at,agent_id,auteur_id,agent:profiles!feedbacks_agent_id_fkey(nom,modele),reponses(id,message,image_url,created_at,lu_admin,auteur_id)")
       .order("created_at", { ascending: false }).limit(500),
     db.from("messages").select("id,agent_id,auteur_id,message,image_url,created_at,lu_admin")
       .order("created_at", { ascending: true }).limit(1000)
@@ -1426,7 +2070,7 @@ function renderClasseur() {
       b.append(dot, nm, ct);
       const un = d.items.reduce((n, f) => n + unreadOf(f), 0) + chatUnread(d.id);
       if (un) { const bd = document.createElement("span"); bd.className = "badge"; bd.style.margin = "0"; bd.textContent = un; b.appendChild(bd); }
-      b.addEventListener("click", () => { view.agent = d.id; renderClasseur(); });
+      b.addEventListener("click", () => { exitSelect(); view.agent = d.id; renderClasseur(); });
       list.appendChild(b);
     });
   });
@@ -1451,13 +2095,18 @@ function threadCard(f, agentName) {
   const card = document.createElement("div");
   card.className = "thread-card" + (unreadOf(f) ? " unread" : "");
 
-  const fb = bubble(fromAgent ? "recv" : "sent", (fromAgent ? "Feedback de " + agentName : "Vous") + " · " + fmt(f.created_at), f.message, f.image_url);
-  fb.appendChild(delLink("Supprimer le feedback", () => removeFeedback(f, reps)));
+  const ownFb = f.auteur_id ? f.auteur_id === uid : !fromAgent;
+  const fb = bubble(fromAgent ? "recv" : "sent", (fromAgent ? "Feedback de " + agentName : "Vous") + " · " + fmt(f.created_at), f.message, f.image_url, {
+    type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].filter(Boolean),
+    canEdit: ownFb, canDelete: true, onEdit: t => saveEdit("fb", f.id, t)
+  });
   card.appendChild(fb);
   reps.forEach(r => {
     const fromA = r.auteur_id === f.agent_id;
-    const rb = bubble(fromA ? "recv" : "sent", (fromA ? agentName : "Vous") + " · " + fmt(r.created_at), r.message, r.image_url);
-    rb.appendChild(delLink("Supprimer la réponse", () => removeReply(r)));
+    const rb = bubble(fromA ? "recv" : "sent", (fromA ? agentName : "Vous") + " · " + fmt(r.created_at), r.message, r.image_url, {
+      type: "rp", id: r.id, parent: f.id, files: [r.image_url].filter(Boolean),
+      canEdit: r.auteur_id === uid, canDelete: true, onEdit: t => saveEdit("rp", r.id, t)
+    });
     card.appendChild(rb);
   });
 
@@ -1492,19 +2141,11 @@ function threadCard(f, agentName) {
   return card;
 }
 
-async function removeChat(m) {
-  if (!confirm("Supprimer ce message ?\nCette action est définitive.")) return;
-  const { data, error } = await db.from("messages").delete().eq("id", m.id).select("id");
-  if (error || !data || !data.length) { alert("Suppression impossible" + (error ? " : " + error.message : " (droits manquants).")); return; }
-  await removeFiles([m.image_url]);
-  await loadHistory();
-}
-
 function renderChat(d, box) {
   if (chatErr) { box.textContent = "La discussion n'est pas disponible : " + chatErr + " (le script SQL a-t-il été exécuté ?)"; return; }
   const msgs = chatStore.filter(m => m.agent_id === d.id);
   if (msgs.length) {
-    const log = chatBubbles(msgs, false, d.nom, removeChat);
+    const log = chatBubbles(msgs, false, d.nom);
     box.appendChild(log);
     setTimeout(() => { log.scrollTop = log.scrollHeight; }, 0);
   } else {
@@ -1551,6 +2192,7 @@ function renderThread(d, q, hit) {
   cnt.textContent = `${d.items.length} feedback${d.items.length > 1 ? "s" : ""}${fbUn ? " · " + fbUn + " non lu" + (fbUn > 1 ? "s" : "") : ""}`;
   head.append(pstat(d.id), nm, cnt);
   if (d.modele) { const m = document.createElement("span"); m.className = "tag model"; m.textContent = d.modele; head.appendChild(m); }
+  head.appendChild(selectBtn());
 
   if (view.s === "chat") { renderChat(d, box); return; }
 
@@ -1582,28 +2224,40 @@ function renderThread(d, q, hit) {
   });
 }
 
-document.querySelectorAll("#secChips button").forEach(b => b.addEventListener("click", () => { view.s = b.dataset.s; renderClasseur(); }));
+document.querySelectorAll("#secChips button").forEach(b => b.addEventListener("click", () => { exitSelect(); view.s = b.dataset.s; renderClasseur(); }));
 $("folderSearch").addEventListener("input", e => { view.q = e.target.value; renderClasseur(); });
-document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener("click", () => { view.v = b.dataset.v; renderClasseur(); }));
+document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener("click", () => { exitSelect(); view.v = b.dataset.v; renderClasseur(); }));
 
 bindPreview($("adminImg"), $("adminPrev"));
 
+const adminRec = voiceRecorder();
+$("adminVoice").appendChild(adminRec.el);
+$("message").addEventListener("keydown", ev => {
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("sendBtn").click(); }
+});
+
 $("sendBtn").addEventListener("click", async () => {
+  if ($("sendBtn").disabled) return;
   const message = $("message").value.trim();
   const file = $("adminImg").files[0];
+  const blob = adminRec.blob();
   const out = $("sendMsg");
-  out.className = "msg";
-  if (!message && !file) { out.className = "msg err"; out.textContent = "Écrivez un message ou ajoutez une image."; return; }
+  out.className = "msg err";
+  if (adminRec.busy()) { out.textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
+  if (!message && !file && !blob) { out.textContent = "Écrivez un message, ajoutez une image ou un vocal."; return; }
+  if (file && blob) { out.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
 
   const sel = $("target").value;
   const recipients = sel === "all" ? agents
     : sel.startsWith("m:") ? agents.filter(a => a.modele === sel.slice(2))
     : agents.filter(a => a.id === sel);
-  if (!recipients.length) { out.className = "msg err"; out.textContent = "Aucun destinataire."; return; }
+  if (!recipients.length) { out.textContent = "Aucun destinataire."; return; }
 
+  out.className = "msg";
+  out.textContent = "";
   $("sendBtn").disabled = true;
   try {
-    const image_url = await uploadImage(file);
+    const image_url = blob ? await uploadAudio(blob) : await uploadImage(file);
     const { error } = await db.from("feedbacks").insert(
       recipients.map(a => ({ agent_id: a.id, auteur_id: uid, message, image_url, modele: a.modele || null }))
     );
@@ -1617,6 +2271,7 @@ $("sendBtn").addEventListener("click", async () => {
   $("sendBtn").disabled = false;
   $("message").value = "";
   clearFile($("adminImg"), $("adminPrev"));
+  adminRec.reset();
   out.className = "msg ok";
   out.textContent = recipients.length > 1 ? `Feedback envoyé à ${recipients.length} agents.` : "Feedback envoyé.";
   await loadHistory();
@@ -1662,20 +2317,31 @@ $("addForm").addEventListener("submit", async e => {
 
 /* ---------- Espace agent : envoyer un message à l'admin ---------- */
 let myModele = null;
+const composeRec = voiceRecorder();
+$("composeVoice").appendChild(composeRec.el);
 $("composeOpen").addEventListener("click", () => {
   $("composeBox").hidden = !$("composeBox").hidden;
   if (!$("composeBox").hidden) $("composeText").focus();
 });
 bindPreview($("composeImg"), $("composePrev"));
+$("composeText").addEventListener("keydown", ev => {
+  if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("composeSend").click(); }
+});
 $("composeSend").addEventListener("click", async () => {
+  if ($("composeSend").disabled) return;
   const message = $("composeText").value.trim();
   const file = $("composeImg").files[0];
+  const blob = composeRec.blob();
   const out = $("composeMsg");
+  out.className = "msg err";
+  if (composeRec.busy()) { out.textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
+  if (!message && !file && !blob) { out.textContent = "Écrivez un message, ajoutez une image ou un vocal."; return; }
+  if (file && blob) { out.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
   out.className = "msg";
-  if (!message && !file) { out.className = "msg err"; out.textContent = "Écrivez un message ou ajoutez une image."; return; }
+  out.textContent = "";
   $("composeSend").disabled = true;
   try {
-    const image_url = await uploadImage(file);
+    const image_url = blob ? await uploadAudio(blob) : await uploadImage(file);
     const { error } = await db.from("feedbacks").insert({
       agent_id: uid, auteur_id: uid, message, image_url, modele: myModele,
       origine: "agent", lu: true, lu_admin: false
@@ -1690,6 +2356,7 @@ $("composeSend").addEventListener("click", async () => {
   $("composeSend").disabled = false;
   $("composeText").value = "";
   clearFile($("composeImg"), $("composePrev"));
+  composeRec.reset();
   out.className = "msg ok";
   out.textContent = "Feedback envoyé à l'administrateur.";
   await loadMine();
@@ -1705,6 +2372,7 @@ document.querySelectorAll("#chips button").forEach(b => b.addEventListener("clic
 /* ---------- Espace agent : onglets et discussion hors feedback ---------- */
 let atab = "fb";
 function setATab(n) {
+  exitSelect();
   atab = n;
   document.querySelectorAll("#agentTabs button").forEach(b => b.classList.toggle("active", b.dataset.atab === n));
   $("apFb").hidden = n !== "fb";
@@ -1722,8 +2390,9 @@ function buildChatCompose() {
   }));
 }
 
-async function loadChat() {
+async function loadChat(auto = false) {
   const box = $("chatList");
+  if (auto && (box.querySelector("textarea") || recActive())) return; // modification en cours
   const { data, error } = await db.from("messages").select("id,agent_id,auteur_id,message,image_url,created_at,lu_agent")
     .eq("agent_id", uid).order("created_at", { ascending: true }).limit(300);
   if (error) { box.textContent = "La discussion n'est pas disponible : " + error.message; return; }
@@ -1759,7 +2428,7 @@ async function loadMine(auto = false) {
   const list = $("mine");
   // Ne pas effacer une réponse en cours de saisie lors de l'actualisation automatique
   if (auto && ([...list.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement)
-      || [...list.querySelectorAll("input[type=file]")].some(i => i.files.length))) return;
+      || [...list.querySelectorAll("input[type=file]")].some(i => i.files.length) || recActive())) return;
 
   const { data, error } = await db.from("feedbacks").select("*,reponses(id,message,image_url,created_at,auteur_id,lu_agent)").eq("agent_id", uid)
     .order("created_at", { ascending: false }).limit(50);
@@ -1804,11 +2473,17 @@ async function loadMine(auto = false) {
     div.appendChild(meta);
 
     // La conversation : message de départ puis réponses des deux côtés
-    if (f.origine === "agent") div.appendChild(bubble("sent", "Vous · " + fmt(f.created_at), f.message, f.image_url));
-    else div.appendChild(bubble("recv", "Administrateur · " + fmt(f.created_at), f.message, f.image_url));
+    const ownFb = f.auteur_id === uid, reps = f.reponses || [];
+    div.appendChild(bubble(f.origine === "agent" ? "sent" : "recv", (f.origine === "agent" ? "Vous" : "Administrateur") + " · " + fmt(f.created_at), f.message, f.image_url, {
+      type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].filter(Boolean),
+      canEdit: ownFb, canDelete: ownFb, onEdit: t => saveEdit("fb", f.id, t)
+    }));
     (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach(r => {
       const mine = r.auteur_id === uid;
-      div.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : "Administrateur") + " · " + fmt(r.created_at), r.message, r.image_url));
+      div.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : "Administrateur") + " · " + fmt(r.created_at), r.message, r.image_url, {
+        type: "rp", id: r.id, parent: f.id, files: [r.image_url].filter(Boolean),
+        canEdit: mine, canDelete: mine, onEdit: t => saveEdit("rp", r.id, t)
+      }));
     });
 
     const open = document.createElement("button");
@@ -1835,6 +2510,33 @@ async function loadMine(auto = false) {
     list.appendChild(div);
   });
 }
+
+/* ---------- Entrée = envoyer (connexion, inscription, mot de passe, ajout d'agent) ---------- */
+function enterSubmit(ids, formId, busyBtnId) {
+  ids.forEach(id => $(id).addEventListener("keydown", ev => {
+    if (ev.key !== "Enter" || ev.shiftKey || ev.isComposing) return;
+    ev.preventDefault();
+    if (busyBtnId && $(busyBtnId).disabled) return;
+    $(formId).requestSubmit();
+  }));
+}
+enterSubmit(["nom", "email", "password"], "login", "loginBtn");
+enterSubmit(["forgotEmail"], "forgot", "forgotSend");
+enterSubmit(["newPw", "newPw2"], "reset", "resetBtn");
+enterSubmit(["newNom", "newEmail", "newModele", "newPass"], "addForm", "addBtn");
+
+/* ---------- Boutons Actualiser (admin et agent) et Sélectionner (agent) ---------- */
+bindRefresh($("refreshAdmin"), async () => {
+  await loadAgents();
+  await Promise.all([loadPending(), loadAccounts(), loadHistory(true), loadPwd()]); // true = ne pas effacer une saisie en cours
+});
+bindRefresh($("refreshAgent"), async () => {
+  if ($("agentTabs").hidden) { await route(); return; } // compte pas encore actif : on revérifie son statut
+  await loadMine(true);
+  await checkNotifs();
+  if (atab === "chat") await loadChat(true);
+});
+$("selAgent").addEventListener("click", toggleSelect);
 
 route();
 </script>
