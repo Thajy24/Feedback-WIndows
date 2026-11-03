@@ -471,6 +471,17 @@ const db = supabase.createClient("https://mzjiyusbgtslfzchoykf.supabase.co", "sb
 const $ = id => document.getElementById(id);
 let uid = null, queue = [], timer = null;
 
+/* Nom de l'administrateur qui a écrit (fonction SQL author_names) */
+const adminNames = new Map(), askedNames = new Set();
+async function loadAdminNames(ids) {
+  const need = [...new Set((ids || []).filter(i => i && i !== uid && !askedNames.has(i)))];
+  if (!need.length) return;
+  const { data, error } = await db.rpc("author_names", { ids: need });
+  if (error) return; // script SQL pas encore exécuté : on garde le titre sans nom
+  need.forEach(i => askedNames.add(i));
+  (data || []).forEach(r => adminNames.set(r.id, r.nom || ""));
+}
+
 function finish() {
   clearInterval(timer);
   clearInterval(remindTimer);
@@ -482,14 +493,14 @@ function finish() {
 
 async function fetchUnread() {
   const [fb, rp] = await Promise.all([
-    db.from("feedbacks").select("id,message,image_url,created_at,modele").eq("agent_id", uid).eq("lu", false),
-    db.from("reponses").select("id,message,image_url,created_at,feedback_id,feedbacks!inner(agent_id,message)").eq("lu_agent", false).eq("feedbacks.agent_id", uid)
+    db.from("feedbacks").select("id,message,image_url,created_at,modele,auteur_id").eq("agent_id", uid).eq("lu", false),
+    db.from("reponses").select("id,message,image_url,created_at,feedback_id,auteur_id,feedbacks!inner(agent_id,message)").eq("lu_agent", false).eq("feedbacks.agent_id", uid)
   ]);
   if (fb.error) return null;
   // deux sortes d'éléments : un nouveau feedback, ou une réponse de l'administrateur dans un feedback
   const items = fb.data.map(f => ({ ...f, kind: "fb", key: "f" + f.id, fid: f.id }));
   if (!rp.error) rp.data.forEach(r => items.push({
-    id: r.id, kind: "rp", key: "r" + r.id, fid: r.feedback_id,
+    id: r.id, kind: "rp", key: "r" + r.id, fid: r.feedback_id, auteur_id: r.auteur_id,
     message: r.message, image_url: r.image_url, created_at: r.created_at, ctx: r.feedbacks?.message || ""
   }));
   return items.sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -497,8 +508,11 @@ async function fetchUnread() {
 
 function render() {
   const f = queue[0];
+  const who = adminNames.get(f.auteur_id); // nom de l'admin (vide si inconnu)
   $("counter").textContent = queue.length > 1 ? `${queue.length} messages à lire` : "1 message à lire";
-  $("title").textContent = f.kind === "rp" ? "Nouvelle réponse de l'administrateur" : "Nouveau feedback";
+  $("title").textContent = f.kind === "rp"
+    ? (who ? "Nouvelle réponse de " + who : "Nouvelle réponse de l'administrateur")
+    : (who ? "Nouveau feedback de " + who : "Nouveau feedback");
   $("ctx").hidden = f.kind !== "rp" || !f.ctx;
   $("ctx").textContent = f.kind === "rp" && f.ctx ? "En réponse à : " + f.ctx.slice(0, 160) : "";
   $("date").textContent = new Date(f.created_at).toLocaleString("fr-FR");
@@ -608,6 +622,7 @@ const seen = new Set(); // feedbacks déjà annoncés par la cloche
 async function refresh() {
   const rows = await fetchUnread();
   if (!rows) return; // erreur réseau : on garde l'affichage actuel
+  await loadAdminNames(rows.map(r => r.auteur_id)); // nom de l'admin qui a écrit
   const prev = queue[0]?.key;
   queue = rows;
   if (!queue.length) return finish();
