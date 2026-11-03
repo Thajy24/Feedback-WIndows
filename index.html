@@ -333,6 +333,31 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
 .selbar button.danger:hover:not(:disabled){filter:brightness(1.1);background:linear-gradient(135deg,#e11d48,#f43f5e)}
 @keyframes selin{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
 @media (max-width:820px){.selbar{bottom:92px}}
+
+/* ----- Copyright et politique de présence ----- */
+.legal{max-width:1140px;margin:0 auto;padding:18px 16px 28px;text-align:center;font-size:12px;color:var(--muted);line-height:1.7}
+.legal a{color:var(--muted);text-decoration:none;border-bottom:1px dashed #b3b9d6}
+.legal a:hover{color:var(--accent);border-color:var(--accent)}
+.legal .sep{margin:0 8px;opacity:.5}
+.legal button.ghost{font-size:12px}
+@media (max-width:820px){.legal{padding-bottom:96px}}
+.policy{display:flex;gap:14px;align-items:flex-start;margin:0 0 14px;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--alert);border-radius:12px;box-shadow:var(--shadow)}
+.policy>svg{width:22px;height:22px;flex:none;margin-top:2px;fill:none;stroke:var(--alert);stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.policy b{display:block;font-size:14px;margin-bottom:2px}
+.policy p{margin:0;font-size:13px;color:var(--muted)}
+.policy button.ghost{margin-top:6px;font-size:12.5px;color:var(--accent);border-bottom-color:var(--accent)}
+.loginpolicy{margin:14px 0 0;font-size:12px;color:var(--muted);text-align:center}
+.pmodal{position:fixed;inset:0;z-index:500;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(8,10,28,.55);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);animation:pmfade .18s ease both}
+.pmodal[hidden]{display:none}
+.pmbox{width:100%;max-width:520px;max-height:90vh;overflow-y:auto;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:0 30px 70px -20px rgba(8,10,28,.6);animation:pmrise .22s cubic-bezier(.2,.8,.2,1) both}
+.pmbox h2{margin:0 0 4px;font-size:17px}
+.pmbox .sub{margin:0 0 14px;font-size:13px;color:var(--muted)}
+.pmbox ol{margin:0 0 14px;padding-left:20px;font-size:14px}
+.pmbox li{margin:0 0 8px}
+.pmbox .warn{margin:0 0 16px;padding:10px 12px;border-radius:10px;background:rgba(225,29,72,.08);border:1px solid rgba(225,29,72,.25);color:var(--ink);font-size:13.5px;font-weight:600}
+.pmbox button{margin:0}
+@keyframes pmfade{from{opacity:0}to{opacity:1}}
+@keyframes pmrise{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -369,6 +394,7 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
     <p id="loginErr" class="msg err" role="alert"></p>
     <button type="button" id="modeBtn" class="ghost">Pas de compte ? Créer un compte</button>
     <button type="button" id="forgotBtn" class="ghost" style="display:block;margin-top:8px">Mot de passe oublié ?</button>
+    <p class="loginpolicy">En vous connectant, vous acceptez la <button type="button" class="ghost" data-policy>politique de présence</button>.</p>
   </form>
 
   <!-- MOT DE PASSE OUBLIÉ : demande envoyée à l'administrateur -->
@@ -532,6 +558,14 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
       <button type="button" data-atab="chat"><svg class="ic"><use href="#i-chat"/></svg><span class="lb">Discussion</span><span id="bChat" class="badge"></span></button>
     </nav>
     <div id="apFb">
+    <div class="policy" role="note">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      <div>
+        <b>Présence obligatoire en début de shift</b>
+        <p>Vous devez ouvrir cette plateforme au début de chaque shift. Tout agent « Hors ligne » à ce moment-là s'expose à une sanction.</p>
+        <button type="button" class="ghost" data-policy>Lire la politique</button>
+      </div>
+    </div>
     <div id="composeWrap" hidden>
       <button type="button" id="composeOpen">Envoyer un feedback</button>
       <div id="composeBox" class="card" hidden style="margin-bottom:12px">
@@ -560,6 +594,25 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
   </section>
 
 </main>
+
+<footer class="legal">
+  <div>© 2026 Thajy Adeah · Tous droits réservés<span class="sep">|</span>Feedback Platform</div>
+  <div>Copyright by Thajy Adeah · <a href="mailto:thajyadeah10@gmail.com">thajyadeah10@gmail.com</a><span class="sep">|</span><button type="button" class="ghost" data-policy>Politique de présence</button></div>
+</footer>
+
+<div id="policyModal" class="pmodal" hidden role="dialog" aria-modal="true" aria-labelledby="pmTitle">
+  <div class="pmbox">
+    <h2 id="pmTitle">Politique de présence</h2>
+    <p class="sub">Applicable à tous les agents.</p>
+    <ol>
+      <li>L'ouverture de cette plateforme est <b>obligatoire au début de chaque shift</b>.</li>
+      <li>Votre statut <b>En ligne / Hors ligne</b> est visible en temps réel par l'administrateur.</li>
+      <li>Tout agent qui apparaît <b>Hors ligne</b> au début de son shift fera l'objet d'une <b>sanction</b>.</li>
+    </ol>
+    <p class="warn">Ouvrez la plateforme et connectez-vous avant l'heure de début de votre shift.</p>
+    <button type="button" id="policyClose">J'ai compris</button>
+  </div>
+</div>
 
 <script>
 /* ---------- Outils communs : notification, menu clic droit, aperçu photo (zoom), message vocal ---------- */
@@ -2559,6 +2612,19 @@ route();
     paint(next);
     try { localStorage.setItem("theme", next); } catch (err) {}
   });
+})();
+</script>
+<script>
+/* ---------- Politique de présence : fenêtre d'information ---------- */
+(function () {
+  const m = document.getElementById("policyModal");
+  let from = null;
+  function open(ev) { from = ev && ev.target; m.hidden = false; document.getElementById("policyClose").focus(); }
+  function close() { m.hidden = true; if (from && from.focus) from.focus(); }
+  document.addEventListener("click", ev => { if (ev.target.closest("[data-policy]")) { ev.stopPropagation(); open(ev); } });
+  document.getElementById("policyClose").addEventListener("click", close);
+  m.addEventListener("click", ev => { if (ev.target === m) close(); });
+  document.addEventListener("keydown", ev => { if (ev.key === "Escape" && !m.hidden) close(); });
 })();
 </script>
 </body>
