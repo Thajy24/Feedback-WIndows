@@ -358,6 +358,27 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
 .pmbox button{margin:0}
 @keyframes pmfade{from{opacity:0}to{opacity:1}}
 @keyframes pmrise{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
+
+/* ----- Choix des destinataires ----- */
+.rpick{border:1px solid #d5d9ec;border-radius:12px;background:var(--card);padding:10px;margin-bottom:14px}
+.rpick .top2{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+.rpick .top2 input{flex:1 1 160px;margin:0;padding:7px 10px;font-size:13px}
+.rpick .qb{width:auto;margin:0;padding:5px 12px;font-size:12px;border-radius:99px;background:var(--card);color:var(--muted);border:1px solid var(--line);box-shadow:none}
+.rpick .qb:hover:not(:disabled){background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none}
+.rpick .qb.on,.rpick .qb.on:hover:not(:disabled){background:var(--grad);color:#fff;border-color:transparent}
+.rpick .models{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.rpick .list{max-height:220px;overflow-y:auto;border-top:1px solid var(--line)}
+.rpick .row{display:flex;align-items:center;gap:10px;margin:0;padding:7px 6px;border-bottom:1px solid var(--line);cursor:pointer;border-radius:8px;text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--ink)}
+.rpick .row:hover{background:var(--accent-soft)}
+.rpick .row input{width:auto;margin:0;accent-color:var(--accent2)}
+.rpick .row .nm{flex:1;font-weight:600}
+.rpick .count{font-size:12px;color:var(--muted);font-weight:700;margin-top:8px}
+.rpick .empty{padding:10px 4px;color:var(--muted);font-size:13px}
+.grpbox{margin-top:12px}
+.grpbox .tg{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;font-weight:600;cursor:pointer;text-transform:none;letter-spacing:0;color:var(--ink)}
+.grpbox .tg input{width:auto;margin:0;accent-color:var(--accent2)}
+.grpbox .rpick{margin:8px 0 0}
+html[data-theme=dark] .rpick{border-color:#2d3466}
 </style>
 </head>
 <body>
@@ -449,14 +470,17 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
       </div>
       <h2>Connectés maintenant</h2>
       <div id="onlineList" class="card"></div>
+      <h2 id="offlineTitle">Hors ligne</h2>
+      <p class="admin-note" style="margin-bottom:10px">À contrôler au début de chaque shift : un agent hors ligne n'a pas ouvert la plateforme.</p>
+      <div id="offlineList" class="card"></div>
     </div>
 
     <!-- Envoyer -->
     <div class="panel" data-panel="send" hidden>
       <h2 style="margin-top:0">Envoyer un feedback</h2>
       <div class="card">
-        <label for="target">Destinataire (un agent, un modèle ou tous)</label>
-        <select id="target"></select>
+        <label>Destinataires (un ou plusieurs agents)</label>
+        <div id="sendPicker"></div>
         <label for="message">Message</label>
         <textarea id="message" placeholder="Entrée pour envoyer · Maj+Entrée pour un retour à la ligne"></textarea>
         <div id="adminVoice"></div>
@@ -1359,7 +1383,7 @@ async function deleteItems(items) {
   await run("feedbacks", fbIds, "fb");
   await run("reponses", rpIds, "rp");
   await run("messages", msgIds, "msg");
-  await removeFiles(items.filter(i => ok.has(i.type + ":" + i.id)).flatMap(i => i.files || []));
+  await removeUnusedFiles(items.filter(i => ok.has(i.type + ":" + i.id)).flatMap(i => i.files || []));
   exitSelect();
   if (fail) alert(`${fail} message${fail > 1 ? "s n'ont" : " n'a"} pas pu être supprimé${fail > 1 ? "s" : ""}` + (err ? " : " + err : " (droits manquants, voir le script SQL)."));
   else toast(n > 1 ? n + " messages supprimés" : "Message supprimé");
@@ -1398,6 +1422,72 @@ async function loadAdminNames(force) {
   if (!r.error && r.data) adminNames = Object.fromEntries(r.data.filter(x => x.nom).map(x => [x.id, x.nom]));
 }
 
+/* ---------- Sélecteur d'agents (envoi de feedback, discussion groupée) ---------- */
+const pickers = new Set();
+function recipientPicker() {
+  const el = document.createElement("div");
+  el.className = "rpick";
+  const sel = new Set();
+  let q = "";
+  const mk = (tag, cls) => { const x = document.createElement(tag); if (cls) x.className = cls; return x; };
+  const qb = (label, fn) => { const b = mk("button", "qb"); b.type = "button"; b.textContent = label; b.addEventListener("click", ev => { ev.stopPropagation(); fn(); }); return b; };
+  const top = mk("div", "top2"), models = mk("div", "models"), list = mk("div", "list"), count = mk("div", "count");
+  const search = mk("input");
+  search.type = "search"; search.placeholder = "Rechercher un agent ou un modèle…"; search.setAttribute("aria-label", "Rechercher un agent");
+  search.addEventListener("input", () => { q = search.value.trim().toLowerCase(); draw(); });
+  search.addEventListener("keydown", ev => { ev.stopPropagation(); if (ev.key === "Enter") ev.preventDefault(); });
+  top.append(search, qb("Tous", () => { agents.forEach(a => sel.add(a.id)); draw(); }), qb("Aucun", () => { sel.clear(); draw(); }));
+  el.append(top, models, list, count);
+  function updateCount() {
+    const n = [...sel].filter(id => agents.some(a => a.id === id)).length;
+    count.textContent = `${n} agent${n > 1 ? "s" : ""} sélectionné${n > 1 ? "s" : ""} sur ${agents.length}`;
+  }
+  function draw() {
+    [...sel].forEach(id => { if (!agents.some(a => a.id === id)) sel.delete(id); });
+    const ms = [...new Set(agents.map(a => (a.modele || "").trim()).filter(Boolean))].sort();
+    models.replaceChildren();
+    models.hidden = !ms.length;
+    ms.forEach(m => {
+      const ids = agents.filter(a => a.modele === m).map(a => a.id), on = ids.every(i => sel.has(i));
+      const b = qb(`Modèle ${m} (${ids.length})`, () => { ids.forEach(i => on ? sel.delete(i) : sel.add(i)); draw(); });
+      if (on) b.classList.add("on");
+      models.appendChild(b);
+    });
+    list.replaceChildren();
+    const shown = agents.filter(a => !q || (a.nom || "").toLowerCase().includes(q) || (a.modele || "").toLowerCase().includes(q));
+    if (!shown.length) { const e = mk("div", "empty"); e.textContent = agents.length ? "Aucun agent ne correspond." : "Aucun agent actif pour le moment."; list.appendChild(e); }
+    shown.forEach(a => {
+      const row = mk("label", "row");
+      const cb = mk("input");
+      cb.type = "checkbox"; cb.checked = sel.has(a.id);
+      cb.addEventListener("change", () => { cb.checked ? sel.add(a.id) : sel.delete(a.id); updateCount(); draw2(); });
+      const dot = mk("span", "pdot" + (online.has(a.id) ? " on" : ""));
+      dot.dataset.uid = a.id;
+      const nm = mk("span", "nm"); nm.textContent = a.nom || "Sans nom";
+      row.append(cb, dot, nm);
+      if (a.modele) { const t = mk("span", "tag model"); t.textContent = a.modele; row.appendChild(t); }
+      list.appendChild(row);
+    });
+    updateCount();
+  }
+  // met à jour les pastilles de modèle sans reconstruire la liste (garde le défilement)
+  function draw2() {
+    [...models.querySelectorAll(".qb")].forEach((b, i) => {
+      const m = [...new Set(agents.map(a => (a.modele || "").trim()).filter(Boolean))].sort()[i];
+      b.classList.toggle("on", agents.filter(a => a.modele === m).every(a => sel.has(a.id)));
+    });
+  }
+  const api = {
+    el, draw,
+    ids: () => agents.filter(a => sel.has(a.id)).map(a => a.id),
+    setIds: arr => { sel.clear(); arr.forEach(i => sel.add(i)); draw(); }
+  };
+  pickers.add(api);
+  draw();
+  return api;
+}
+function refreshPickers() { pickers.forEach(p => { if (!p.el.isConnected) pickers.delete(p); else p.draw(); }); }
+
 /* ---------- Onglets admin ---------- */
 function setTab(name) {
   exitSelect();
@@ -1425,6 +1515,24 @@ function renderOverview() {
   $("stPending").textContent = stats.pending;
   $("stReplies").textContent = stats.replies;
   $("stPwd").textContent = stats.pwd;
+
+  const off = agents.filter(a => !online.has(a.id)).sort((a, b) => (a.nom || "").localeCompare(b.nom || ""));
+  $("offlineTitle").textContent = "Hors ligne (" + off.length + ")";
+  const ob = $("offlineList");
+  ob.replaceChildren();
+  if (!off.length) ob.textContent = "Tous les agents actifs sont en ligne.";
+  off.forEach(a => {
+    const row = document.createElement("div");
+    row.className = "online-row";
+    const left = document.createElement("div");
+    left.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap";
+    const n = document.createElement("strong");
+    n.textContent = a.nom || "Sans nom";
+    left.append(pstat(a.id), n);
+    if (a.modele) { const m = document.createElement("span"); m.className = "tag model"; m.textContent = a.modele; left.appendChild(m); }
+    row.appendChild(left);
+    ob.appendChild(row);
+  });
 
   const box = $("onlineList");
   box.replaceChildren();
@@ -1670,25 +1778,7 @@ async function loadAgents() {
   const { data } = await db.from("profiles").select("id,nom,modele").eq("role", "agent").eq("actif", true).order("nom");
   agents = data || [];
   const modeles = [...new Set(agents.map(a => (a.modele || "").trim()).filter(Boolean))].sort();
-  const label = a => a.nom + (a.modele ? " (" + a.modele + ")" : "");
-  const agentOpt = a => {
-    const o = option(a.id, label(a));
-    o.dataset.uid = a.id; o.dataset.label = label(a);
-    if (online.has(a.id)) o.textContent = "● " + o.textContent;
-    return o;
-  };
-
-  const prev = $("target").value;
-  const children = [option("all", "Tous les agents")];
-  if (modeles.length) {
-    children.push(group("Par modèle", modeles.map(m => {
-      const n = agents.filter(a => a.modele === m).length;
-      return option("m:" + m, `Modèle : ${m} (${n} agent${n > 1 ? "s" : ""})`);
-    })));
-  }
-  children.push(group("Agents", agents.map(agentOpt)));
-  $("target").replaceChildren(...children);
-  if ([...$("target").options].some(o => o.value === prev)) $("target").value = prev;
+  refreshPickers();
 
   $("modeles").replaceChildren(...modeles.map(m => { const o = document.createElement("option"); o.value = m; return o; }));
   renderOverview();
@@ -1986,6 +2076,18 @@ async function removeFiles(urls) {
   if (paths.length) await db.storage.from(BUCKET).remove(paths);
 }
 
+// Un même fichier peut être joint à plusieurs messages (envoi groupé) : on ne l'efface que s'il n'est plus utilisé
+async function removeUnusedFiles(urls) {
+  urls = [...new Set(urls.filter(Boolean))];
+  if (!urls.length) return;
+  const used = new Set();
+  for (const t of ["feedbacks", "reponses", "messages"]) {
+    const { data } = await db.from(t).select("image_url").in("image_url", urls);
+    (data || []).forEach(r => used.add(r.image_url));
+  }
+  await removeFiles(urls.filter(u => !used.has(u)));
+}
+
 /* ---------- Discussions : éléments communs (admin et agent) ---------- */
 // Bulles d'une discussion. viewerIsAgent = true côté agent. Un message est « de l'agent » si son auteur est l'agent.
 function chatBubbles(msgs, viewerIsAgent, otherName) {
@@ -2064,7 +2166,7 @@ function composer(placeholder, onSend) {
 let store = [], chatStore = [], chatErr = "", view = { agent: null, v: "all", q: "", s: "fb" };
 const unreadOf = f => (f.origine === "agent" && f.lu_admin === false ? 1 : 0) + (f.reponses || []).filter(r => !r.lu_admin).length;
 const chatUnread = id => chatStore.filter(m => m.agent_id === id && !m.lu_admin).length;
-const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement) || recActive();
+const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement) || recActive() || !!$("thread").querySelector(".grpbox input:checked");
 
 function recount() {
   const total = store.reduce((n, f) => n + unreadOf(f), 0) + chatStore.filter(m => !m.lu_admin).length;
@@ -2218,9 +2320,25 @@ function renderChat(d, box) {
     e.textContent = "Aucun message dans cette discussion.";
     box.appendChild(e);
   }
+  // Discussion groupée : réservée à l'admin, un même message est envoyé à plusieurs agents
+  const grp = document.createElement("div");
+  grp.className = "grpbox";
+  const tg = document.createElement("label");
+  tg.className = "tg";
+  const gcb = document.createElement("input");
+  gcb.type = "checkbox";
+  tg.append(gcb, document.createTextNode("Discussion groupée : écrire à plusieurs agents à la fois"));
+  const gpk = recipientPicker();
+  gpk.el.hidden = true;
+  gcb.addEventListener("change", () => { gpk.el.hidden = !gcb.checked; if (gcb.checked) gpk.setIds([d.id]); });
+  grp.append(tg, gpk.el);
+  box.appendChild(grp);
   box.appendChild(composer("Écrire à " + d.nom + "… (Entrée pour envoyer)", async (message, image_url) => {
-    const { error } = await db.from("messages").insert({ agent_id: d.id, auteur_id: uid, message, image_url, lu_admin: true, lu_agent: false });
+    const ids = gcb.checked ? gpk.ids() : [d.id];
+    if (!ids.length) throw new Error("Choisissez au moins un agent destinataire.");
+    const { error } = await db.from("messages").insert(ids.map(id => ({ agent_id: id, auteur_id: uid, message, image_url, lu_admin: true, lu_agent: false })));
     if (error) throw new Error(error.message);
+    if (ids.length > 1) toast("Message envoyé à " + ids.length + " agents");
     await loadHistory();
   }));
   // Ouvrir la discussion = la lire
@@ -2294,6 +2412,8 @@ document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener
 
 bindPreview($("adminImg"), $("adminPrev"));
 
+const sendPicker = recipientPicker();
+$("sendPicker").appendChild(sendPicker.el);
 const adminRec = voiceRecorder();
 $("adminVoice").appendChild(adminRec.el);
 $("message").addEventListener("keydown", ev => {
@@ -2311,11 +2431,9 @@ $("sendBtn").addEventListener("click", async () => {
   if (!message && !file && !blob) { out.textContent = "Écrivez un message, ajoutez une image ou un vocal."; return; }
   if (file && blob) { out.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
 
-  const sel = $("target").value;
-  const recipients = sel === "all" ? agents
-    : sel.startsWith("m:") ? agents.filter(a => a.modele === sel.slice(2))
-    : agents.filter(a => a.id === sel);
-  if (!recipients.length) { out.textContent = "Aucun destinataire."; return; }
+  const chosen = sendPicker.ids();
+  const recipients = agents.filter(a => chosen.includes(a.id));
+  if (!recipients.length) { out.textContent = "Choisissez au moins un agent destinataire."; return; }
 
   out.className = "msg";
   out.textContent = "";
