@@ -358,22 +358,6 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
 .pmbox button{margin:0}
 @keyframes pmfade{from{opacity:0}to{opacity:1}}
 @keyframes pmrise{from{opacity:0;transform:translateY(12px) scale(.98)}to{opacity:1;transform:none}}
-
-/* ----- Sélecteur d'agents (envoi de feedback et discussion groupée) ----- */
-.pick{border:1px solid #d5d9ec;border-radius:12px;padding:12px;margin-bottom:14px;background:var(--card)}
-.pick input[type=search]{margin-bottom:10px}
-.pick-actions{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px}
-.pick-actions button{width:auto;margin:0;padding:5px 12px;background:var(--card);color:var(--muted);border:1px solid var(--line);font-weight:600;font-size:12.5px;border-radius:99px;box-shadow:none}
-.pick-actions button:hover:not(:disabled){background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none}
-.pick-actions button.on{background:var(--grad);color:#fff;border-color:transparent}
-.pick-list{max-height:240px;overflow-y:auto;border:1px solid var(--line);border-radius:10px}
-.pick-row{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;margin:0;text-transform:none;letter-spacing:0;font-size:14px;font-weight:600;color:var(--ink)}
-.pick-row:last-child{border-bottom:0}
-.pick-row:hover{background:var(--accent-soft)}
-.pick-row input{width:auto;margin:0;accent-color:var(--accent)}
-.pick-row .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.pick-count{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--muted)}
-.pick-empty{padding:12px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -448,7 +432,6 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
     <nav class="tabs" role="tablist" aria-label="Sections">
       <button type="button" role="tab" data-tab="overview"><svg class="ic"><use href="#i-home"/></svg><span class="lb">Vue d'ensemble</span></button>
       <button type="button" role="tab" data-tab="send"><svg class="ic"><use href="#i-send"/></svg><span class="lb">Envoyer</span></button>
-      <button type="button" role="tab" data-tab="group"><svg class="ic"><use href="#i-users"/></svg><span class="lb">Discussion groupée</span></button>
       <button type="button" role="tab" data-tab="history"><svg class="ic"><use href="#i-folder"/></svg><span class="lb">Classeur</span><span id="bHistory" class="badge"></span></button>
       <button type="button" role="tab" data-tab="agents"><svg class="ic"><use href="#i-users"/></svg><span class="lb">Agents</span></button>
       <button type="button" role="tab" data-tab="accounts"><svg class="ic"><use href="#i-clip"/></svg><span class="lb">Inscriptions</span><span id="bAccounts" class="badge"></span></button>
@@ -472,8 +455,8 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
     <div class="panel" data-panel="send" hidden>
       <h2 style="margin-top:0">Envoyer un feedback</h2>
       <div class="card">
-        <label>Destinataires (cochez un ou plusieurs agents)</label>
-        <div id="sendPick"></div>
+        <label for="target">Destinataire (un agent, un modèle ou tous)</label>
+        <select id="target"></select>
         <label for="message">Message</label>
         <textarea id="message" placeholder="Entrée pour envoyer · Maj+Entrée pour un retour à la ligne"></textarea>
         <div id="adminVoice"></div>
@@ -482,17 +465,6 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
         <img id="adminPrev" class="preview" alt="Aperçu" hidden>
         <button id="sendBtn">Envoyer le feedback</button>
         <div id="sendMsg" class="msg" role="status"></div>
-      </div>
-    </div>
-
-    <!-- Discussion groupée (administrateur uniquement) -->
-    <div class="panel" data-panel="group" hidden>
-      <h2 style="margin-top:0">Discussion groupée</h2>
-      <div class="card">
-        <p class="admin-note">Le message est envoyé dans la discussion de chaque agent coché. Seul l'administrateur peut faire une discussion groupée : les agents ne voient pas les autres destinataires.</p>
-        <label>Destinataires</label>
-        <div id="groupPick"></div>
-        <div id="groupComposer"></div>
       </div>
     </div>
 
@@ -994,18 +966,6 @@ function group(label, opts) {
 const fmt = d => new Date(d).toLocaleString("fr-FR");
 const resetUrl = () => location.href.split(/[?#]/)[0]; // adresse de cette page (à autoriser dans Supabase)
 
-/* ---------- Noms des administrateurs (visibles par les agents) ---------- */
-const adminNames = new Map(), askedNames = new Set();
-const adminLabel = id => adminNames.get(id) || "Administrateur";
-async function loadAdminNames(ids) {
-  const need = [...new Set((ids || []).filter(i => i && i !== uid && !askedNames.has(i)))];
-  if (!need.length) return;
-  const { data, error } = await db.rpc("author_names", { ids: need });
-  if (error) return; // script SQL pas encore exécuté : on garde « Administrateur »
-  need.forEach(i => askedNames.add(i));
-  (data || []).forEach(r => adminNames.set(r.id, r.nom || "Administrateur"));
-}
-
 /* ---------- Vérification des adresses email : une vraie adresse, pas n'importe laquelle ---------- */
 const DISPOSABLE = new Set(("mailinator.com guerrillamail.com guerrillamail.net guerrillamail.org guerrillamailblock.com sharklasers.com grr.la " +
   "10minutemail.com 10minutemail.net tempmail.com temp-mail.org temp-mail.io tempmail.net tempr.email tempail.com throwawaymail.com " +
@@ -1091,6 +1051,9 @@ function setPstat(s) {
 function refreshPresence() {
   document.querySelectorAll(".pstat[data-uid]").forEach(setPstat);
   document.querySelectorAll(".pdot[data-uid]").forEach(x => x.classList.toggle("on", online.has(x.dataset.uid)));
+  document.querySelectorAll("option[data-uid]").forEach(o => {
+    o.textContent = (online.has(o.dataset.uid) ? "● " : "") + o.dataset.label;
+  });
   renderOverview();
 }
 
@@ -1396,16 +1359,7 @@ async function deleteItems(items) {
   await run("feedbacks", fbIds, "fb");
   await run("reponses", rpIds, "rp");
   await run("messages", msgIds, "msg");
-  // Un même fichier peut être partagé par plusieurs messages (envoi à plusieurs agents) : on ne l'efface que s'il n'est plus utilisé
-  const gone = new Set(items.filter(i => ok.has(i.type + ":" + i.id)).map(i => i.type + ":" + i.id));
-  const used = new Set();
-  chatStore.forEach(m => { if (m.image_url && !gone.has("msg:" + m.id)) used.add(m.image_url); });
-  store.forEach(f => {
-    if (gone.has("fb:" + f.id)) return;
-    if (f.image_url) used.add(f.image_url);
-    (f.reponses || []).forEach(r => { if (r.image_url && !gone.has("rp:" + r.id)) used.add(r.image_url); });
-  });
-  await removeFiles(items.filter(i => gone.has(i.type + ":" + i.id)).flatMap(i => i.files || []).filter(u => !used.has(u)));
+  await removeFiles(items.filter(i => ok.has(i.type + ":" + i.id)).flatMap(i => i.files || []));
   exitSelect();
   if (fail) alert(`${fail} message${fail > 1 ? "s n'ont" : " n'a"} pas pu être supprimé${fail > 1 ? "s" : ""}` + (err ? " : " + err : " (droits manquants, voir le script SQL)."));
   else toast(n > 1 ? n + " messages supprimés" : "Message supprimé");
@@ -1431,6 +1385,17 @@ async function uploadAudio(blob) {
   const { error } = await db.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || "audio/webm" });
   if (error) throw new Error(error.message);
   return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/* Noms des administrateurs : l'agent voit qui lui écrit (au lieu de « Administrateur ») */
+let adminNames = {}, adminNamesAt = 0;
+const adminName = id => adminNames[id] || "Administrateur";
+async function loadAdminNames(force) {
+  if (!force && Date.now() - adminNamesAt < 300000) return; // rechargé au plus toutes les 5 minutes
+  adminNamesAt = Date.now();
+  let r = await db.rpc("fp_admin_names");
+  if (r.error) r = await db.from("profiles").select("id,nom").eq("role", "admin"); // secours si la fonction SQL n'est pas installée
+  if (!r.error && r.data) adminNames = Object.fromEntries(r.data.filter(x => x.nom).map(x => [x.id, x.nom]));
 }
 
 /* ---------- Onglets admin ---------- */
@@ -1705,7 +1670,26 @@ async function loadAgents() {
   const { data } = await db.from("profiles").select("id,nom,modele").eq("role", "agent").eq("actif", true).order("nom");
   agents = data || [];
   const modeles = [...new Set(agents.map(a => (a.modele || "").trim()).filter(Boolean))].sort();
-  pickers.forEach(p => p.render()); // listes d'agents à cocher (Envoyer, Discussion groupée)
+  const label = a => a.nom + (a.modele ? " (" + a.modele + ")" : "");
+  const agentOpt = a => {
+    const o = option(a.id, label(a));
+    o.dataset.uid = a.id; o.dataset.label = label(a);
+    if (online.has(a.id)) o.textContent = "● " + o.textContent;
+    return o;
+  };
+
+  const prev = $("target").value;
+  const children = [option("all", "Tous les agents")];
+  if (modeles.length) {
+    children.push(group("Par modèle", modeles.map(m => {
+      const n = agents.filter(a => a.modele === m).length;
+      return option("m:" + m, `Modèle : ${m} (${n} agent${n > 1 ? "s" : ""})`);
+    })));
+  }
+  children.push(group("Agents", agents.map(agentOpt)));
+  $("target").replaceChildren(...children);
+  if ([...$("target").options].some(o => o.value === prev)) $("target").value = prev;
+
   $("modeles").replaceChildren(...modeles.map(m => { const o = document.createElement("option"); o.value = m; return o; }));
   renderOverview();
   if (!$("admin").hidden) renderClasseur();
@@ -2004,7 +1988,6 @@ async function removeFiles(urls) {
 
 /* ---------- Discussions : éléments communs (admin et agent) ---------- */
 // Bulles d'une discussion. viewerIsAgent = true côté agent. Un message est « de l'agent » si son auteur est l'agent.
-// otherName : texte, ou fonction (message) => nom (côté agent : nom de l'admin qui a écrit)
 function chatBubbles(msgs, viewerIsAgent, otherName) {
   const log = document.createElement("div");
   log.className = "chatlog";
@@ -2022,7 +2005,7 @@ function chatBubbles(msgs, viewerIsAgent, otherName) {
     const fromAgent = m.auteur_id === m.agent_id;
     const mine = viewerIsAgent ? fromAgent : !fromAgent;
     const own = m.auteur_id === uid;
-    log.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : (typeof otherName === "function" ? otherName(m) : otherName)) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), m.message, m.image_url, {
+    log.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : (viewerIsAgent ? adminName(m.auteur_id) : otherName)) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), m.message, m.image_url, {
       type: "msg", id: m.id, files: [m.image_url].filter(Boolean),
       canEdit: own, canDelete: own || isAdmin(), onEdit: t => saveEdit("msg", m.id, t)
     }));
@@ -2309,105 +2292,6 @@ document.querySelectorAll("#secChips button").forEach(b => b.addEventListener("c
 $("folderSearch").addEventListener("input", e => { view.q = e.target.value; renderClasseur(); });
 document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener("click", () => { exitSelect(); view.v = b.dataset.v; renderClasseur(); }));
 
-/* ---------- Sélecteur d'agents (cases à cocher, recherche, sélection par modèle) ---------- */
-const pickers = [];
-function agentPicker(host) {
-  const sel = new Set(), chips = [];
-  let q = "";
-  const wrap = document.createElement("div");
-  wrap.className = "pick";
-  const search = document.createElement("input");
-  search.type = "search";
-  search.placeholder = "Rechercher un agent ou un modèle…";
-  search.setAttribute("aria-label", "Rechercher un agent");
-  const actions = document.createElement("div");
-  actions.className = "pick-actions";
-  const list = document.createElement("div");
-  list.className = "pick-list";
-  const count = document.createElement("div");
-  count.className = "pick-count";
-  wrap.append(search, actions, list, count);
-  host.appendChild(wrap);
-
-  function sync() {
-    list.querySelectorAll("input[data-id]").forEach(cb => { cb.checked = sel.has(cb.dataset.id); });
-    chips.forEach(c => { const l = c.ids(); c.b.classList.toggle("on", !!l.length && l.every(id => sel.has(id))); });
-    const n = sel.size;
-    count.textContent = n ? `${n} agent${n > 1 ? "s" : ""} sélectionné${n > 1 ? "s" : ""}` : "Aucun agent sélectionné";
-  }
-  function addChip(label, ids) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.textContent = label;
-    b.addEventListener("click", () => {
-      const l = ids(), every = l.length && l.every(id => sel.has(id));
-      l.forEach(id => every ? sel.delete(id) : sel.add(id));
-      sync();
-    });
-    actions.appendChild(b);
-    chips.push({ b, ids });
-  }
-  function render() {
-    [...sel].forEach(id => { if (!agents.some(a => a.id === id)) sel.delete(id); });
-    chips.length = 0;
-    actions.replaceChildren();
-    addChip("Tous", () => agents.map(a => a.id));
-    addChip("En ligne", () => agents.filter(a => online.has(a.id)).map(a => a.id));
-    [...new Set(agents.map(a => (a.modele || "").trim()).filter(Boolean))].sort().forEach(m => {
-      const n = agents.filter(a => a.modele === m).length;
-      addChip(`Modèle : ${m} (${n})`, () => agents.filter(a => a.modele === m).map(a => a.id));
-    });
-    list.replaceChildren();
-    const shown = agents.filter(a => !q || (a.nom || "").toLowerCase().includes(q) || (a.modele || "").toLowerCase().includes(q));
-    if (!shown.length) {
-      const e = document.createElement("div");
-      e.className = "pick-empty";
-      e.textContent = agents.length ? "Aucun agent ne correspond." : "Aucun agent actif.";
-      list.appendChild(e);
-    }
-    shown.forEach(a => {
-      const row = document.createElement("label");
-      row.className = "pick-row";
-      const cb = document.createElement("input");
-      cb.type = "checkbox";
-      cb.dataset.id = a.id;
-      cb.addEventListener("change", () => { cb.checked ? sel.add(a.id) : sel.delete(a.id); sync(); });
-      const dot = document.createElement("span");
-      dot.className = "pdot" + (online.has(a.id) ? " on" : "");
-      dot.dataset.uid = a.id;
-      const nm = document.createElement("span");
-      nm.className = "nm";
-      nm.textContent = a.nom;
-      row.append(cb, dot, nm);
-      if (a.modele) {
-        const t = document.createElement("span");
-        t.className = "tag model";
-        t.textContent = a.modele;
-        row.appendChild(t);
-      }
-      list.appendChild(row);
-    });
-    sync();
-  }
-  search.addEventListener("input", () => { q = search.value.trim().toLowerCase(); render(); });
-  const api = { render, ids: () => [...sel].filter(id => agents.some(a => a.id === id)) };
-  pickers.push(api);
-  render();
-  return api;
-}
-const sendPick = agentPicker($("sendPick"));
-const groupPick = agentPicker($("groupPick"));
-
-// Discussion groupée (admin uniquement) : le même message est déposé dans la discussion de chaque agent coché
-$("groupComposer").appendChild(composer("Message pour les agents sélectionnés… (Entrée pour envoyer)", async (message, image_url) => {
-  const ids = groupPick.ids();
-  if (!ids.length) { await removeFiles([image_url]); throw new Error("Sélectionnez au moins un agent."); }
-  const { error } = await db.from("messages").insert(ids.map(id => ({ agent_id: id, auteur_id: uid, message, image_url, lu_admin: true, lu_agent: false })));
-  if (error) { await removeFiles([image_url]); throw new Error(error.message); }
-  toast(ids.length > 1 ? `Message envoyé à ${ids.length} agents` : "Message envoyé");
-  await loadHistory();
-}));
-
 bindPreview($("adminImg"), $("adminPrev"));
 
 const adminRec = voiceRecorder();
@@ -2427,9 +2311,11 @@ $("sendBtn").addEventListener("click", async () => {
   if (!message && !file && !blob) { out.textContent = "Écrivez un message, ajoutez une image ou un vocal."; return; }
   if (file && blob) { out.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
 
-  const chosen = sendPick.ids();
-  const recipients = agents.filter(a => chosen.includes(a.id));
-  if (!recipients.length) { out.textContent = "Sélectionnez au moins un agent."; return; }
+  const sel = $("target").value;
+  const recipients = sel === "all" ? agents
+    : sel.startsWith("m:") ? agents.filter(a => a.modele === sel.slice(2))
+    : agents.filter(a => a.id === sel);
+  if (!recipients.length) { out.textContent = "Aucun destinataire."; return; }
 
   out.className = "msg";
   out.textContent = "";
@@ -2574,7 +2460,6 @@ async function loadChat(auto = false) {
   const { data, error } = await db.from("messages").select("id,agent_id,auteur_id,message,image_url,created_at,lu_agent")
     .eq("agent_id", uid).order("created_at", { ascending: true }).limit(300);
   if (error) { box.textContent = "La discussion n'est pas disponible : " + error.message; return; }
-  await loadAdminNames(data.map(m => m.auteur_id)); // nom de l'admin qui a écrit
   const old = box.firstElementChild;
   const stick = !old || !old.classList.contains("chatlog") || old.scrollHeight - old.scrollTop - old.clientHeight < 40;
   const oldTop = old ? old.scrollTop : 0;
@@ -2585,7 +2470,7 @@ async function loadChat(auto = false) {
     e.textContent = "Aucun message pour le moment. Écrivez le premier !";
     box.appendChild(e);
   } else {
-    const log = chatBubbles(data, true, m => adminLabel(m.auteur_id));
+    const log = chatBubbles(data, true, "Administrateur");
     box.appendChild(log);
     setTimeout(() => { log.scrollTop = stick ? log.scrollHeight : oldTop; }, 0);
   }
@@ -2605,14 +2490,13 @@ async function markReadAgent(f) {
 
 async function loadMine(auto = false) {
   const list = $("mine");
+  await loadAdminNames();
   // Ne pas effacer une réponse en cours de saisie lors de l'actualisation automatique
   if (auto && ([...list.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement)
       || [...list.querySelectorAll("input[type=file]")].some(i => i.files.length) || recActive())) return;
 
   const { data, error } = await db.from("feedbacks").select("*,reponses(id,message,image_url,created_at,auteur_id,lu_agent)").eq("agent_id", uid)
     .order("created_at", { ascending: false }).limit(50);
-  // Nom des admins qui ont écrit (feedbacks et réponses) : chargé avant d'effacer la liste, pour éviter deux affichages qui se chevauchent
-  if (!error && data.length) await loadAdminNames(data.flatMap(f => [f.origine !== "agent" ? f.auteur_id : null, ...(f.reponses || []).map(r => r.auteur_id)]));
   list.replaceChildren();
   if (error) { list.textContent = "Impossible de charger vos feedbacks : " + error.message + " (le script SQL a-t-il été exécuté ?)"; return; }
   if (!data.length) { list.textContent = "Aucun feedback pour le moment."; return; }
@@ -2655,13 +2539,13 @@ async function loadMine(auto = false) {
 
     // La conversation : message de départ puis réponses des deux côtés
     const ownFb = f.auteur_id === uid, reps = f.reponses || [];
-    div.appendChild(bubble(f.origine === "agent" ? "sent" : "recv", (f.origine === "agent" ? "Vous" : adminLabel(f.auteur_id)) + " · " + fmt(f.created_at), f.message, f.image_url, {
+    div.appendChild(bubble(f.origine === "agent" ? "sent" : "recv", (f.origine === "agent" ? "Vous" : adminName(f.auteur_id)) + " · " + fmt(f.created_at), f.message, f.image_url, {
       type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].filter(Boolean),
       canEdit: ownFb, canDelete: ownFb, onEdit: t => saveEdit("fb", f.id, t)
     }));
     (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach(r => {
       const mine = r.auteur_id === uid;
-      div.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : adminLabel(r.auteur_id)) + " · " + fmt(r.created_at), r.message, r.image_url, {
+      div.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : adminName(r.auteur_id)) + " · " + fmt(r.created_at), r.message, r.image_url, {
         type: "rp", id: r.id, parent: f.id, files: [r.image_url].filter(Boolean),
         canEdit: mine, canDelete: mine, onEdit: t => saveEdit("rp", r.id, t)
       }));
@@ -2713,6 +2597,7 @@ bindRefresh($("refreshAdmin"), async () => {
 });
 bindRefresh($("refreshAgent"), async () => {
   if ($("agentTabs").hidden) { await route(); return; } // compte pas encore actif : on revérifie son statut
+  adminNamesAt = 0; // recharge aussi les noms
   await loadMine(true);
   await checkNotifs();
   if (atab === "chat") await loadChat(true);
