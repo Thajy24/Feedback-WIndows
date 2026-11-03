@@ -380,6 +380,21 @@ body.selecting .bubble.picked::before{background:var(--accent2) url("data:image/
 .grpbox .rpick{margin:8px 0 0}
 html[data-theme=dark] .rpick{border-color:#2d3466}
 
+/* ----- Un dossier par feedback (date et heure) ----- */
+.fdir{margin-bottom:14px}
+.fdir>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:12px;padding:11px 16px;user-select:none;background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);transition:background .2s}
+.fdir[open]>summary{border-bottom-left-radius:0;border-bottom-right-radius:0;border-bottom-color:transparent}
+.fdir>summary::-webkit-details-marker{display:none}
+.fdir>summary:hover{background:var(--accent-soft)}
+.fdir.unread>summary{border-left:4px solid var(--accent2)}
+.fdir .fi{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;flex:none;color:#fff;background:var(--grad)}
+.fdir .fi svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.fdir .tt{flex:1;min-width:0}
+.fdir .tt b{display:block}
+.fdir .tt span{display:block;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fdir .chev{width:16px;height:16px;flex:none;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.fdir[open]>summary .chev{transform:rotate(90deg)}
+.fdir>.thread-card,.fdir>.fb{margin-bottom:0;border-top-left-radius:0;border-top-right-radius:0;border-top:0}
 /* ----- Tâches (un dossier par feedback) ----- */
 .taskform{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;box-shadow:var(--shadow);margin-bottom:14px}
 .taskform textarea{min-height:64px;margin-bottom:10px}
@@ -1245,7 +1260,7 @@ function buildSelBar() {
   document.body.appendChild(el);
   selBar = { el, n, all, del };
 }
-function enterSelect(key) { document.body.classList.add("selecting"); if (key) picked.add(key); paintSel(); }
+function enterSelect(key) { document.body.classList.add("selecting"); document.querySelectorAll("details.fdir").forEach(d => { d.open = true; }); if (key) picked.add(key); paintSel(); }
 function exitSelect() {
   if (!selecting() && !picked.size) return;
   document.body.classList.remove("selecting");
@@ -2289,6 +2304,33 @@ async function markRead(items) {
 }
 
 // Un feedback = une conversation : message de départ, puis réponses de l'agent et de l'admin
+const fdirOpen = new Map(); // dossier -> ouvert ou fermé (conservé quand la liste se rafraîchit)
+function fbTitle(f) {
+  const d = new Date(f.created_at);
+  return "Feedback du " + d.toLocaleDateString("fr-FR") + " à " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+}
+// Dossier d'un feedback : le feedback et toute sa discussion restent ensemble, un autre feedback = un autre dossier
+function fbFolder(f, body, unread) {
+  const key = String(f.id), n = 1 + (f.reponses || []).length;
+  const det = document.createElement("details");
+  det.className = "fdir" + (unread ? " unread" : "");
+  det.dataset.fid = key;
+  det.open = fdirOpen.has(key) ? fdirOpen.get(key) : unread > 0;
+  if (document.body.classList.contains("selecting")) det.open = true;
+  det.addEventListener("toggle", () => fdirOpen.set(key, det.open));
+  const sum = document.createElement("summary");
+  const fi = document.createElement("span"); fi.className = "fi"; fi.innerHTML = SVG_FOLDER;
+  const tt = document.createElement("div"); tt.className = "tt";
+  const b = document.createElement("b"); b.textContent = fbTitle(f);
+  const sub = document.createElement("span"); sub.textContent = fbLabel(f) + " · " + n + " message" + (n > 1 ? "s" : "");
+  tt.append(b, sub);
+  sum.append(fi, tt);
+  if (unread) { const t = document.createElement("span"); t.className = "tag unread"; t.textContent = unread + " non lu" + (unread > 1 ? "s" : ""); sum.appendChild(t); }
+  sum.insertAdjacentHTML("beforeend", SVG_CHEV);
+  det.append(sum, body);
+  return det;
+}
+
 function threadCard(f, agentName) {
   const fromAgent = f.origine === "agent";
   const reps = (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -2563,7 +2605,7 @@ function renderThread(d, q, hit) {
       box.appendChild(m);
       last = mk;
     }
-    box.appendChild(threadCard(f, d.nom));
+    box.appendChild(fbFolder(f, threadCard(f, d.nom), unreadOf(f)));
   });
 }
 
@@ -2851,7 +2893,7 @@ async function loadMine(auto = false) {
       div.addEventListener("click", markRead, { once: true });
       div.addEventListener("keydown", e => { if (e.target === div && e.key === "Enter") markRead(); });
     }
-    list.appendChild(div);
+    list.appendChild(fbFolder(f, div, un));
   });
 }
 
