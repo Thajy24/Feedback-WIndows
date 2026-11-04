@@ -395,6 +395,28 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
 .fdir .chev{width:16px;height:16px;flex:none;fill:none;stroke:var(--muted);stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
 .fdir[open]>summary .chev{transform:rotate(90deg)}
 .fdir>.thread-card,.fdir>.fb{margin-bottom:0;border-top-left-radius:0;border-top-right-radius:0;border-top:0}
+
+/* ----- Images multiples, collage d'image ou de lien ----- */
+.pick{margin:6px 0 10px}
+.pickrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pickrow input[type=file]{flex:0 1 auto;width:auto;max-width:100%;margin:0}
+.pickhint{font-size:12px;color:var(--muted);flex:1 1 200px}
+.pickgrid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.thumb{position:relative}
+.thumb img{width:84px;height:84px;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block}
+.thumb .rm{position:absolute;top:-7px;right:-7px;width:22px;height:22px;min-width:0;padding:0;margin:0;border-radius:50%;background:#e11d48;color:#fff;font-size:15px;line-height:1;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.pick .msg:empty{display:none}
+.imgs{display:flex;flex-wrap:wrap;gap:6px}
+.imgs.multi img{width:calc(50% - 3px);height:150px;object-fit:cover}
+
+/* ----- Renommer un agent (petit crayon) ----- */
+.pencil{display:inline-grid;place-items:center;width:26px;height:26px;min-width:0;padding:0;margin:0 0 0 2px;flex:none;background:transparent;color:var(--muted);border:0;border-radius:8px;box-shadow:none;cursor:pointer}
+.pencil svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.pencil:hover:not(:disabled){background:var(--accent-soft);color:var(--accent);transform:none;box-shadow:none;filter:none}
+.nameedit{display:inline-flex;align-items:center;gap:6px}
+.nameedit input{width:190px;max-width:100%;margin:0;padding:5px 10px}
+.nameedit button{width:auto;min-width:0;margin:0;padding:4px 10px;font-size:13px;line-height:1.2}
+.nameedit button.no{background:var(--card);color:var(--muted);border:1px solid var(--line);box-shadow:none}
 </style>
 </head>
 <body>
@@ -500,9 +522,8 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
         <label for="message">Message</label>
         <textarea id="message" placeholder="Entrée pour envoyer · Maj+Entrée pour un retour à la ligne"></textarea>
         <div id="adminVoice"></div>
-        <label for="adminImg">Image (optionnel)</label>
-        <input id="adminImg" type="file" accept="image/*">
-        <img id="adminPrev" class="preview" alt="Aperçu" hidden>
+        <label>Images (optionnel)</label>
+        <div id="adminPick"></div>
         <button id="sendBtn">Envoyer le feedback</button>
         <div id="sendMsg" class="msg" role="status"></div>
       </div>
@@ -612,9 +633,8 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
         <label for="composeText">Votre feedback à l'administrateur</label>
         <textarea id="composeText" placeholder="Entrée pour envoyer · Maj+Entrée pour un retour à la ligne"></textarea>
         <div id="composeVoice"></div>
-        <label for="composeImg">Image (optionnel)</label>
-        <input id="composeImg" type="file" accept="image/*">
-        <img id="composePrev" class="preview" alt="Aperçu" hidden>
+        <label>Images (optionnel)</label>
+        <div id="composePick"></div>
         <button type="button" id="composeSend">Envoyer</button>
         <p id="composeMsg" class="msg" role="status"></p>
       </div>
@@ -971,6 +991,99 @@ function voiceRecorder(onChange) {
   return api;
 }
 
+/* ---------- Images : plusieurs par message ; coller une image (Ctrl+V) ou un lien d'image ---------- */
+const MAX_IMAGES = 10;
+const urlsOf = v => String(v || "").split("\n").map(x => x.trim()).filter(Boolean); // plusieurs liens = un par ligne
+const isImageLink = t => /^https?:\/\/\S+?(\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?\S*)?(#\S*)?|\/storage\/v1\/object\/public\/\S+)$/i.test(t);
+const imgPickers = new Set();
+const pickActive = () => { let on = false; imgPickers.forEach(k => { if (!k.el.isConnected) imgPickers.delete(k); else if (k.count()) on = true; }); return on; };
+function imagePicker(ta, onChange) {
+  const el = document.createElement("div");
+  el.className = "pick";
+  const row = document.createElement("div");
+  row.className = "pickrow";
+  const fi = document.createElement("input");
+  fi.type = "file"; fi.accept = "image/*"; fi.multiple = true;
+  fi.setAttribute("aria-label", "Ajouter des images");
+  const hint = document.createElement("span");
+  hint.className = "pickhint";
+  hint.textContent = "Plusieurs images possibles · collez une image (Ctrl+V) ou un lien d'image dans le message";
+  row.append(fi, hint);
+  const grid = document.createElement("div");
+  grid.className = "pickgrid"; grid.hidden = true;
+  const note = document.createElement("p");
+  note.className = "msg err";
+  el.append(row, grid, note);
+  let items = [];
+  const changed = () => { if (onChange) onChange(); };
+  const free = it => { if (it.file) URL.revokeObjectURL(it.src); };
+  function paint() {
+    grid.replaceChildren();
+    grid.hidden = !items.length;
+    items.forEach((it, i) => {
+      const w = document.createElement("div");
+      w.className = "thumb";
+      const img = document.createElement("img");
+      img.src = it.src; img.alt = "Image " + (i + 1);
+      bindImage(img, it.src, false);
+      img.addEventListener("error", () => {
+        if (!it.url || !items.includes(it)) return; // seuls les liens peuvent être invalides
+        items = items.filter(x => x !== it);
+        note.textContent = "Ce lien n'est pas une image accessible : " + (it.url || "").slice(0, 80);
+        paint(); changed();
+      });
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "rm"; x.textContent = "×";
+      x.title = "Retirer cette image"; x.setAttribute("aria-label", "Retirer l'image " + (i + 1));
+      x.addEventListener("click", ev => { ev.stopPropagation(); free(it); items = items.filter(y => y !== it); note.textContent = ""; paint(); changed(); });
+      w.append(img, x);
+      grid.appendChild(w);
+    });
+  }
+  function room(n) {
+    if (items.length + n <= MAX_IMAGES) return true;
+    note.textContent = "Maximum " + MAX_IMAGES + " images par message.";
+    return false;
+  }
+  function add(files) {
+    note.textContent = "";
+    const list = [...files].filter(f => f.type.startsWith("image/"));
+    if (!list.length) { if (files.length) note.textContent = "Seules les images sont acceptées."; return; }
+    const keep = list.slice(0, Math.max(0, MAX_IMAGES - items.length));
+    if (keep.length < list.length) note.textContent = "Maximum " + MAX_IMAGES + " images par message.";
+    keep.forEach(f => items.push({ file: f, src: URL.createObjectURL(f) }));
+    paint(); changed();
+  }
+  function addLink(u) {
+    note.textContent = "";
+    if (items.some(it => it.url === u)) return;
+    if (!room(1)) return;
+    items.push({ url: u, src: u });
+    paint(); changed();
+  }
+  fi.addEventListener("change", () => { add(fi.files); fi.value = ""; });
+  if (ta) ta.addEventListener("paste", ev => {
+    const cd = ev.clipboardData;
+    if (!cd) return;
+    const files = [...(cd.files || [])].filter(f => f.type.startsWith("image/"));
+    if (files.length) { ev.preventDefault(); add(files); return; }
+    const t = (cd.getData("text") || "").trim();
+    if (t && !/\s/.test(t) && isImageLink(t)) { ev.preventDefault(); addLink(t); } // lien d'image : joint comme image
+  });
+  const api = {
+    el, any: () => items.length > 0, count: () => items.length, add, addLink,
+    reset() { items.forEach(free); items = []; note.textContent = ""; fi.value = ""; paint(); changed(); },
+    // Envoie les fichiers puis renvoie la valeur à enregistrer : un lien par ligne (ou null)
+    async value() {
+      const out = [];
+      for (const it of items) out.push(it.file ? await uploadImage(it.file) : it.url);
+      return out.length ? out.join("\n") : null;
+    }
+  };
+  imgPickers.add(api);
+  return api;
+}
+
 /* Vocal : reconnu à son nom de fichier « vocal-… » */
 const isAudio = u => /\/vocal-[^/?#]*$/.test(u || "");
 function audioEl(url) {
@@ -1176,13 +1289,19 @@ function bubble(kind, metaText, text, imageUrl, opts) {
     t.textContent = text;
     b.appendChild(t);
   }
-  if (imageUrl) {
-    if (isAudio(imageUrl)) b.appendChild(audioEl(imageUrl));
+  const us = urlsOf(imageUrl);
+  if (us.length) {
+    if (isAudio(us[0])) b.appendChild(audioEl(us[0]));
     else {
-      const img = document.createElement("img");
-      img.src = imageUrl; img.alt = "Image jointe"; img.loading = "lazy";
-      bindImage(img, imageUrl, true); // clic = agrandir, clic droit = options
-      b.appendChild(img);
+      const wrap = document.createElement("div");
+      wrap.className = "imgs" + (us.length > 1 ? " multi" : "");
+      us.forEach((u, i) => {
+        const img = document.createElement("img");
+        img.src = u; img.alt = us.length > 1 ? "Image jointe " + (i + 1) : "Image jointe"; img.loading = "lazy";
+        bindImage(img, u, true); // clic = agrandir, clic droit = options
+        wrap.appendChild(img);
+      });
+      b.appendChild(wrap);
     }
   }
   if (opts) msgActions(b, text, imageUrl, opts);
@@ -1283,8 +1402,10 @@ function msgMenu(b, text, imageUrl, o) {
     return items;
   }
   if (text) items.push({ label: "Copier le texte", fn: () => copyText(text) });
-  if (imageUrl && isAudio(imageUrl)) items.push({ label: "Télécharger le vocal", fn: () => downloadImage(imageUrl) });
-  else if (imageUrl) items.push({ label: "Agrandir la photo", fn: () => openLightbox(imageUrl) }, { label: "Télécharger la photo", fn: () => downloadImage(imageUrl) });
+  const us = urlsOf(imageUrl);
+  if (us.length && isAudio(us[0])) items.push({ label: "Télécharger le vocal", fn: () => downloadImage(us[0]) });
+  else if (us.length > 1) items.push({ label: "Agrandir la 1re photo", fn: () => openLightbox(us[0]) }, { label: "Télécharger les " + us.length + " photos", fn: async () => { for (const u of us) await downloadImage(u); } });
+  else if (us.length) items.push({ label: "Agrandir la photo", fn: () => openLightbox(us[0]) }, { label: "Télécharger la photo", fn: () => downloadImage(us[0]) });
   if (o.canEdit) items.push({ label: "Modifier", key: "F2", fn: () => startEdit(b, text, o) });
   if (sk) { if (items.length) items.push("-"); items.push({ label: "Sélectionner", fn: () => enterSelect(sk) }); }
   if (o.canDelete) items.push({ label: "Supprimer", key: "Suppr", danger: true, fn: () => deleteItems([o]) });
@@ -2015,6 +2136,62 @@ async function loadPwd() {
   });
 }
 
+/* ---------- Renommer un agent : petit crayon, Entrée enregistre, Échap annule ---------- */
+const SVG_PENCIL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
+function pencilBtn(label, fn) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "pencil"; b.title = label;
+  b.setAttribute("aria-label", label);
+  b.innerHTML = SVG_PENCIL;
+  b.addEventListener("click", ev => { ev.stopPropagation(); fn(); });
+  return b;
+}
+async function saveAgentName(id, nom) {
+  let { data, error } = await db.from("profiles").update({ nom }).eq("id", id).select("id");
+  if (error || !data || !data.length) { // secours : fonction SQL réservée à l'administrateur (renommer_agent.sql)
+    const r = await db.rpc("admin_rename_agent", { target: id, new_nom: nom });
+    if (r.error) return error ? error.message : "droits manquants (exécutez renommer_agent.sql dans Supabase)";
+  }
+  return null;
+}
+// Remplace le nom affiché par un champ de saisie ; pencil = le crayon à masquer pendant la saisie
+function editAgentName(nameEl, pencil, id, current) {
+  const wrap = document.createElement("span");
+  wrap.className = "nameedit";
+  const inp = document.createElement("input");
+  inp.type = "text"; inp.value = current; inp.maxLength = 60;
+  inp.setAttribute("aria-label", "Nouveau nom de " + current);
+  const ok = document.createElement("button");
+  ok.type = "button"; ok.textContent = "Enregistrer";
+  const no = document.createElement("button");
+  no.type = "button"; no.className = "no"; no.textContent = "Annuler"; no.setAttribute("aria-label", "Annuler");
+  wrap.append(inp, ok, no);
+  const back = () => { wrap.replaceWith(nameEl); pencil.hidden = false; };
+  async function save() {
+    if (ok.disabled) return;
+    const nom = inp.value.trim().replace(/\s+/g, " ");
+    if (!nom) { inp.focus(); return; }
+    if (nom === current) { back(); return; }
+    ok.disabled = true;
+    const err = await saveAgentName(id, nom);
+    if (err) { ok.disabled = false; alert("Modification impossible : " + err); inp.focus(); return; }
+    toast("Nom modifié");
+    await loadAgents();
+    await Promise.all([loadPending(), loadHistory()]);
+  }
+  ok.addEventListener("click", ev => { ev.stopPropagation(); save(); });
+  no.addEventListener("click", ev => { ev.stopPropagation(); back(); });
+  inp.addEventListener("click", ev => ev.stopPropagation());
+  inp.addEventListener("keydown", ev => {
+    ev.stopPropagation();
+    if (ev.key === "Enter" && !ev.isComposing) { ev.preventDefault(); save(); }
+    else if (ev.key === "Escape") { ev.preventDefault(); back(); }
+  });
+  nameEl.replaceWith(wrap);
+  pencil.hidden = true;
+  inp.focus(); inp.select();
+}
+
 async function loadPending() {
   const { data } = await db.from("profiles").select("id,nom,actif,modele").eq("role", "agent").order("actif").order("nom");
   const list = $("pending");
@@ -2031,7 +2208,8 @@ async function loadPending() {
     const tag = document.createElement("span");
     tag.className = "tag " + (p.actif ? "read" : "unread");
     tag.textContent = p.actif ? "Validé" : "En attente";
-    left.append(pstat(p.id), n, tag);
+    const pen = pencilBtn("Modifier le nom de " + p.nom, () => editAgentName(n, pen, p.id, p.nom));
+    left.append(pstat(p.id), n, pen, tag);
 
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;gap:8px;align-items:center;flex-wrap:wrap";
@@ -2097,9 +2275,11 @@ async function removeUnusedFiles(urls) {
   urls = [...new Set(urls.filter(Boolean))];
   if (!urls.length) return;
   const used = new Set();
-  for (const t of ["feedbacks", "reponses", "messages"]) {
-    const { data } = await db.from(t).select("image_url").in("image_url", urls);
-    (data || []).forEach(r => used.add(r.image_url));
+  for (const u of urls) {
+    for (const t of ["feedbacks", "reponses", "messages"]) {
+      const { data } = await db.from(t).select("image_url").like("image_url", "%" + u + "%").limit(1);
+      if (data && data.length) { used.add(u); break; }
+    }
   }
   await removeFiles(urls.filter(u => !used.has(u)));
 }
@@ -2124,7 +2304,7 @@ function chatBubbles(msgs, viewerIsAgent, otherName) {
     const mine = viewerIsAgent ? fromAgent : !fromAgent;
     const own = m.auteur_id === uid;
     log.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : (viewerIsAgent ? adminName(m.auteur_id) : otherName)) + " · " + d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }), m.message, m.image_url, {
-      type: "msg", id: m.id, files: [m.image_url].filter(Boolean),
+      type: "msg", id: m.id, files: urlsOf(m.image_url),
       canEdit: own, canDelete: own || isAdmin(), onEdit: t => saveEdit("msg", m.id, t)
     }));
   });
@@ -2137,11 +2317,7 @@ function composer(placeholder, onSend) {
   box.className = "composer";
   const ta = document.createElement("textarea");
   ta.placeholder = placeholder;
-  const fi = document.createElement("input");
-  fi.type = "file"; fi.accept = "image/*";
-  const prev = document.createElement("img");
-  prev.className = "preview"; prev.alt = "Aperçu"; prev.hidden = true;
-  bindPreview(fi, prev);
+  const pick = imagePicker(ta);
   const rec = voiceRecorder();
   const btn = document.createElement("button");
   btn.type = "button";
@@ -2150,14 +2326,14 @@ function composer(placeholder, onSend) {
   note.className = "msg err";
   async function go() {
     if (btn.disabled) return;
-    const message = ta.value.trim(), file = fi.files[0], blob = rec.blob();
+    const message = ta.value.trim(), file = pick.any(), blob = rec.blob();
     if (rec.busy()) { note.textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
     if (!message && !file && !blob) return;
-    if (file && blob) { note.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
+    if (file && blob) { note.textContent = "Joignez soit des photos, soit un vocal (pas les deux)."; return; }
     btn.disabled = true;
     note.textContent = "";
     try {
-      const image_url = blob ? await uploadAudio(blob) : await uploadImage(file);
+      const image_url = blob ? await uploadAudio(blob) : await pick.value();
       await onSend(message, image_url);
     } catch (e) {
       note.textContent = "Envoi impossible : " + e.message;
@@ -2166,7 +2342,7 @@ function composer(placeholder, onSend) {
     }
     btn.disabled = false;
     ta.value = "";
-    clearFile(fi, prev);
+    pick.reset();
     rec.reset();
   }
   btn.addEventListener("click", ev => { ev.stopPropagation(); go(); });
@@ -2174,7 +2350,7 @@ function composer(placeholder, onSend) {
     ev.stopPropagation();
     if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); go(); }
   });
-  box.append(ta, fi, prev, rec.el, btn, note);
+  box.append(ta, pick.el, rec.el, btn, note);
   return box;
 }
 
@@ -2182,7 +2358,7 @@ function composer(placeholder, onSend) {
 let store = [], chatStore = [], chatErr = "", view = { agent: null, v: "all", q: "", s: "fb" };
 const unreadOf = f => (f.origine === "agent" && f.lu_admin === false ? 1 : 0) + (f.reponses || []).filter(r => !r.lu_admin).length;
 const chatUnread = id => chatStore.filter(m => m.agent_id === id && !m.lu_admin).length;
-const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement) || recActive() || !!$("thread").querySelector(".grpbox input:checked");
+const typingInThread = () => [...$("thread").querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement) || recActive() || pickActive() || !!$("thread").querySelector(".grpbox input:checked") || !!$("folderHead").querySelector(".nameedit");
 
 function recount() {
   const total = store.reduce((n, f) => n + unreadOf(f), 0) + chatStore.filter(m => !m.lu_admin).length;
@@ -2276,7 +2452,8 @@ const SVG_CHEV = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path
 function fbLabel(f) {
   const m = (f.message || "").trim().replace(/\s+/g, " ");
   if (m) return m.length > 70 ? m.slice(0, 70) + "…" : m;
-  return f.image_url ? (isAudio(f.image_url) ? "Message vocal" : "Photo jointe") : "Feedback";
+  const u = urlsOf(f.image_url);
+  return u.length ? (isAudio(u[0]) ? "Message vocal" : u.length > 1 ? u.length + " photos jointes" : "Photo jointe") : "Feedback";
 }
 const fdirOpen = new Map(); // dossier -> ouvert ou fermé (conservé quand la liste se rafraîchit)
 function fbTitle(f) {
@@ -2313,14 +2490,14 @@ function threadCard(f, agentName) {
 
   const ownFb = f.auteur_id ? f.auteur_id === uid : !fromAgent;
   const fb = bubble(fromAgent ? "recv" : "sent", (fromAgent ? "Feedback de " + agentName : "Vous") + " · " + fmt(f.created_at), f.message, f.image_url, {
-    type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].filter(Boolean),
+    type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].flatMap(urlsOf),
     canEdit: ownFb, canDelete: true, onEdit: t => saveEdit("fb", f.id, t)
   });
   card.appendChild(fb);
   reps.forEach(r => {
     const fromA = r.auteur_id === f.agent_id;
     const rb = bubble(fromA ? "recv" : "sent", (fromA ? agentName : "Vous") + " · " + fmt(r.created_at), r.message, r.image_url, {
-      type: "rp", id: r.id, parent: f.id, files: [r.image_url].filter(Boolean),
+      type: "rp", id: r.id, parent: f.id, files: urlsOf(r.image_url),
       canEdit: r.auteur_id === uid, canDelete: true, onEdit: t => saveEdit("rp", r.id, t)
     });
     card.appendChild(rb);
@@ -2422,7 +2599,8 @@ function renderThread(d, q, hit) {
   const cnt = document.createElement("span");
   cnt.className = "muted";
   cnt.textContent = `${d.items.length} feedback${d.items.length > 1 ? "s" : ""}${fbUn ? " · " + fbUn + " non lu" + (fbUn > 1 ? "s" : "") : ""}`;
-  head.append(pstat(d.id), nm, cnt);
+  const pen = pencilBtn("Modifier le nom de " + d.nom, () => editAgentName(nm, pen, d.id, d.nom));
+  head.append(pstat(d.id), nm, pen, cnt);
   if (d.modele) { const m = document.createElement("span"); m.className = "tag model"; m.textContent = d.modele; head.appendChild(m); }
   head.appendChild(selectBtn());
 
@@ -2460,7 +2638,8 @@ document.querySelectorAll("#secChips button").forEach(b => b.addEventListener("c
 $("folderSearch").addEventListener("input", e => { view.q = e.target.value; renderClasseur(); });
 document.querySelectorAll("#threadChips button").forEach(b => b.addEventListener("click", () => { exitSelect(); view.v = b.dataset.v; renderClasseur(); }));
 
-bindPreview($("adminImg"), $("adminPrev"));
+const adminPick = imagePicker($("message"));
+$("adminPick").appendChild(adminPick.el);
 
 const sendPicker = recipientPicker();
 $("sendPicker").appendChild(sendPicker.el);
@@ -2473,13 +2652,13 @@ $("message").addEventListener("keydown", ev => {
 $("sendBtn").addEventListener("click", async () => {
   if ($("sendBtn").disabled) return;
   const message = $("message").value.trim();
-  const file = $("adminImg").files[0];
+  const file = adminPick.any();
   const blob = adminRec.blob();
   const out = $("sendMsg");
   out.className = "msg err";
   if (adminRec.busy()) { out.textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
   if (!message && !file && !blob) { out.textContent = "Écrivez un message, ajoutez une image ou un vocal."; return; }
-  if (file && blob) { out.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
+  if (file && blob) { out.textContent = "Joignez soit des photos, soit un vocal (pas les deux)."; return; }
 
   const chosen = sendPicker.ids();
   const recipients = agents.filter(a => chosen.includes(a.id));
@@ -2489,7 +2668,7 @@ $("sendBtn").addEventListener("click", async () => {
   out.textContent = "";
   $("sendBtn").disabled = true;
   try {
-    const image_url = blob ? await uploadAudio(blob) : await uploadImage(file);
+    const image_url = blob ? await uploadAudio(blob) : await adminPick.value();
     const { error } = await db.from("feedbacks").insert(
       recipients.map(a => ({ agent_id: a.id, auteur_id: uid, message, image_url, modele: a.modele || null }))
     );
@@ -2502,7 +2681,7 @@ $("sendBtn").addEventListener("click", async () => {
   }
   $("sendBtn").disabled = false;
   $("message").value = "";
-  clearFile($("adminImg"), $("adminPrev"));
+  adminPick.reset();
   adminRec.reset();
   out.className = "msg ok";
   out.textContent = recipients.length > 1 ? `Feedback envoyé à ${recipients.length} agents.` : "Feedback envoyé.";
@@ -2555,25 +2734,26 @@ $("composeOpen").addEventListener("click", () => {
   $("composeBox").hidden = !$("composeBox").hidden;
   if (!$("composeBox").hidden) $("composeText").focus();
 });
-bindPreview($("composeImg"), $("composePrev"));
+const composePick = imagePicker($("composeText"));
+$("composePick").appendChild(composePick.el);
 $("composeText").addEventListener("keydown", ev => {
   if (ev.key === "Enter" && !ev.shiftKey && !ev.isComposing) { ev.preventDefault(); $("composeSend").click(); }
 });
 $("composeSend").addEventListener("click", async () => {
   if ($("composeSend").disabled) return;
   const message = $("composeText").value.trim();
-  const file = $("composeImg").files[0];
+  const file = composePick.any();
   const blob = composeRec.blob();
   const out = $("composeMsg");
   out.className = "msg err";
   if (composeRec.busy()) { out.textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
   if (!message && !file && !blob) { out.textContent = "Écrivez un message, ajoutez une image ou un vocal."; return; }
-  if (file && blob) { out.textContent = "Un seul fichier joint par message : une photo ou un vocal."; return; }
+  if (file && blob) { out.textContent = "Joignez soit des photos, soit un vocal (pas les deux)."; return; }
   out.className = "msg";
   out.textContent = "";
   $("composeSend").disabled = true;
   try {
-    const image_url = blob ? await uploadAudio(blob) : await uploadImage(file);
+    const image_url = blob ? await uploadAudio(blob) : await composePick.value();
     const { error } = await db.from("feedbacks").insert({
       agent_id: uid, auteur_id: uid, message, image_url, modele: myModele,
       origine: "agent", lu: true, lu_admin: false
@@ -2587,7 +2767,7 @@ $("composeSend").addEventListener("click", async () => {
   }
   $("composeSend").disabled = false;
   $("composeText").value = "";
-  clearFile($("composeImg"), $("composePrev"));
+  composePick.reset();
   composeRec.reset();
   out.className = "msg ok";
   out.textContent = "Feedback envoyé à l'administrateur.";
@@ -2661,7 +2841,7 @@ async function loadMine(auto = false) {
   await loadAdminNames();
   // Ne pas effacer une réponse en cours de saisie lors de l'actualisation automatique
   if (auto && ([...list.querySelectorAll("textarea")].some(t => t.value.trim() || t === document.activeElement)
-      || [...list.querySelectorAll("input[type=file]")].some(i => i.files.length) || recActive())) return;
+      || pickActive() || recActive())) return;
 
   const { data, error } = await db.from("feedbacks").select("*,reponses(id,message,image_url,created_at,auteur_id,lu_agent)").eq("agent_id", uid)
     .order("created_at", { ascending: false }).limit(50);
@@ -2708,13 +2888,13 @@ async function loadMine(auto = false) {
     // La conversation : message de départ puis réponses des deux côtés
     const ownFb = f.auteur_id === uid, reps = f.reponses || [];
     div.appendChild(bubble(f.origine === "agent" ? "sent" : "recv", (f.origine === "agent" ? "Vous" : adminName(f.auteur_id)) + " · " + fmt(f.created_at), f.message, f.image_url, {
-      type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].filter(Boolean),
+      type: "fb", id: f.id, files: [f.image_url, ...reps.map(r => r.image_url)].flatMap(urlsOf),
       canEdit: ownFb, canDelete: ownFb, onEdit: t => saveEdit("fb", f.id, t)
     }));
     (f.reponses || []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)).forEach(r => {
       const mine = r.auteur_id === uid;
       div.appendChild(bubble(mine ? "sent" : "recv", (mine ? "Vous" : adminName(r.auteur_id)) + " · " + fmt(r.created_at), r.message, r.image_url, {
-        type: "rp", id: r.id, parent: f.id, files: [r.image_url].filter(Boolean),
+        type: "rp", id: r.id, parent: f.id, files: urlsOf(r.image_url),
         canEdit: mine, canDelete: mine, onEdit: t => saveEdit("rp", r.id, t)
       }));
     });
