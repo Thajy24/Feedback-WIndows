@@ -115,6 +115,39 @@ html[data-theme=dark] .voice button.mic,html[data-theme=dark] .voice button.plai
   .legal { margin:12px 0 0; text-align:center; font-size:11px; line-height:1.6; color:var(--muted); user-select:text; }
   .legal a { color:var(--muted); text-decoration:none; border-bottom:1px dashed #b3b9d6; }
   .legal a:hover { color:var(--accent); border-color:var(--accent); }
+
+/* ----- Images multiples, collage d'image ou de lien ----- */
+.pick{margin:6px 0 10px}
+.pickrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.pickrow input[type=file]{flex:0 1 auto;width:auto;max-width:100%;margin:0}
+.pickhint{font-size:12px;color:var(--muted);flex:1 1 200px}
+.pickgrid{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.thumb{position:relative}
+.thumb img{width:72px;height:72px;object-fit:cover;border-radius:10px;border:1px solid var(--line);display:block}
+.thumb .rm{position:absolute;top:-7px;right:-7px;width:22px;height:22px;min-width:0;padding:0;margin:0;border-radius:50%;background:#e11d48;color:#fff;font-size:15px;line-height:1;display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.pick .msg:empty{display:none}
+.imgs{display:flex;flex-wrap:wrap;gap:6px}
+.imgs.multi img{width:calc(50% - 3px);height:150px;object-fit:cover}
+/* ----- Feedback simple / urgent ----- */
+.typepick{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:6px 0 12px}
+.tp{display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border:1.5px solid var(--line);border-radius:14px;background:var(--card);cursor:pointer;text-transform:none;letter-spacing:0;font-size:14px;font-weight:500;color:var(--ink);margin:0;transition:border-color .2s,box-shadow .2s,background .2s}
+.tp:hover{border-color:var(--accent)}
+.tp input{width:auto;margin:3px 0 0;flex:none;accent-color:var(--accent)}
+.tp .tpt{flex:1;min-width:0}
+.tp b{display:block;font-size:14px}
+.tp.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px rgba(99,102,241,.15)}
+.tp.urgent.on{border-color:#e11d48;background:rgba(225,29,72,.07);box-shadow:0 0 0 3px rgba(225,29,72,.15)}
+.tp.urgent input{accent-color:#e11d48}
+.tag.urgent{background:#e11d48;color:#fff;animation:urgpulse 1.4s ease-in-out infinite}
+@keyframes urgpulse{50%{box-shadow:0 0 0 5px rgba(225,29,72,.25)}}
+.fdir.urg>summary{border-left:4px solid #e11d48;background:rgba(225,29,72,.06)}
+.fdir.urg .fi{background:linear-gradient(135deg,#fb7185,#e11d48)}
+@media (prefers-reduced-motion:reduce){.tag.urgent{animation:none}}
+
+.urgban{display:none;align-items:center;gap:10px;margin:0 0 12px;padding:10px 14px;border-radius:12px;background:#e11d48;color:#fff;font-weight:800;letter-spacing:.06em;animation:urgpulse 1.4s ease-in-out infinite}
+.urgban svg{width:20px;height:20px;fill:none;stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+body.urgent .urgban{display:flex}
+body.urgent header{background:linear-gradient(135deg,#9f1239,#e11d48 60%,#fb7185)}
 </style>
 </head>
 <body>
@@ -127,6 +160,7 @@ html[data-theme=dark] .voice button.mic,html[data-theme=dark] .voice button.plai
     <button type="button" class="rf" id="rf" title="Actualiser" aria-label="Actualiser"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg>Actualiser</button>
   </header>
   <main id="mainBox">
+    <div class="urgban" role="alert"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 21h20z"/><path d="M12 10v5"/><path d="M12 18.5v.01"/></svg>FEEDBACK URGENT : à traiter immédiatement</div>
     <div class="meta"><strong id="from"></strong><span id="date"></span><span id="model" class="tag" hidden></span></div>
     <div id="ctx" class="ctx" hidden></div>
     <div id="bubble" class="bubble"></div>
@@ -134,6 +168,7 @@ html[data-theme=dark] .voice button.mic,html[data-theme=dark] .voice button.plai
   <footer>
     <label for="reply">Votre réponse (facultatif)</label>
     <textarea id="reply" placeholder="Écrivez ici pour répondre… (Entrée pour envoyer)"></textarea>
+    <div id="popPick"></div>
     <div id="popVoice"></div>
     <p id="err" class="err" role="alert"></p>
     <button id="go" type="button" disabled>Marquer comme lu</button>
@@ -457,6 +492,151 @@ function voiceRecorder(onChange) {
   return api;
 }
 
+/* ---------- Sonneries : feedback simple (notification discrète) et feedback urgent (alarme) ---------- */
+const RING_VOLUME = 0.8; // 0 = muet, 1 = fort
+// [début en s, fréquence en Hz, durée en s, intensité]
+const RING_SIMPLE = [[0, 987.77, 0.30, 0.55], [0.11, 1318.51, 0.55, 0.60]]; // deux notes montantes, doux « pop-pop » de messagerie
+const RING_URGENT = [];                                                      // 3 séries de 3 bips aigus alternés, façon alarme
+for (let g = 0; g < 3; g++) [1175, 880, 1175].forEach((f, i) => RING_URGENT.push([g * 0.95 + i * 0.2, f, 0.15, 0.6]));
+let ringCtx = null, ringOut = null;
+function playRing(kind) {
+  if (!RING_VOLUME) return;
+  try {
+    if (!ringCtx) {
+      ringCtx = new (window.AudioContext || window.webkitAudioContext)();
+      ringOut = ringCtx.createDynamicsCompressor();
+      ringOut.connect(ringCtx.destination);
+    }
+    ringCtx.resume().then(() => {
+      const t0 = ringCtx.currentTime + 0.05, urgent = kind === "urgent";
+      const master = ringCtx.createGain();
+      master.gain.value = RING_VOLUME;
+      master.connect(ringOut);
+      (urgent ? RING_URGENT : RING_SIMPLE).forEach(([at, f, dur, amp]) => {
+        const t = t0 + at, g = ringCtx.createGain();
+        g.connect(master);
+        if (urgent) { // bip carré (harmoniques 1, 3, 5) : net, qui perce
+          const re = new Float32Array(6), im = new Float32Array(6);
+          im[1] = 1; im[3] = 1 / 3; im[5] = 1 / 5;
+          const o = ringCtx.createOscillator();
+          o.setPeriodicWave(ringCtx.createPeriodicWave(re, im));
+          o.frequency.value = f;
+          o.connect(g);
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(amp, t + 0.005);
+          g.gain.setValueAtTime(amp, t + dur - 0.015);
+          g.gain.linearRampToValueAtTime(0, t + dur);
+          o.start(t); o.stop(t + dur + 0.02);
+        } else { // note douce : sinus + une octave plus haut, qui s'éteint progressivement
+          [[1, 1], [2, 0.2]].forEach(([mult, a]) => {
+            const o = ringCtx.createOscillator(), h = ringCtx.createGain();
+            o.type = "sine"; o.frequency.value = f * mult;
+            h.gain.value = a;
+            o.connect(h).connect(g);
+            o.start(t); o.stop(t + dur + 0.02);
+          });
+          g.gain.setValueAtTime(0.0001, t);
+          g.gain.linearRampToValueAtTime(amp, t + 0.004);
+          g.gain.exponentialRampToValueAtTime(0.0008, t + dur);
+        }
+      });
+    }).catch(() => {});
+  } catch (e) {}
+}
+
+/* ---------- Images : plusieurs par message ; coller une image (Ctrl+V) ou un lien d'image ---------- */
+const MAX_IMAGES = 10;
+const urlsOf = v => String(v || "").split("\n").map(x => x.trim()).filter(Boolean); // plusieurs liens = un par ligne
+const isImageLink = t => /^https?:\/\/\S+?(\.(png|jpe?g|gif|webp|avif|bmp|svg)(\?\S*)?(#\S*)?|\/storage\/v1\/object\/public\/\S+)$/i.test(t);
+const imgPickers = new Set();
+const pickActive = () => { let on = false; imgPickers.forEach(k => { if (!k.el.isConnected) imgPickers.delete(k); else if (k.count()) on = true; }); return on; };
+function imagePicker(ta, onChange) {
+  const el = document.createElement("div");
+  el.className = "pick";
+  const row = document.createElement("div");
+  row.className = "pickrow";
+  const fi = document.createElement("input");
+  fi.type = "file"; fi.accept = "image/*"; fi.multiple = true;
+  fi.setAttribute("aria-label", "Ajouter des images");
+  const hint = document.createElement("span");
+  hint.className = "pickhint";
+  hint.textContent = "Plusieurs images possibles · collez une image (Ctrl+V) ou un lien d'image dans le message";
+  row.append(fi, hint);
+  const grid = document.createElement("div");
+  grid.className = "pickgrid"; grid.hidden = true;
+  const note = document.createElement("p");
+  note.className = "msg err";
+  el.append(row, grid, note);
+  let items = [];
+  const changed = () => { if (onChange) onChange(); };
+  const free = it => { if (it.file) URL.revokeObjectURL(it.src); };
+  function paint() {
+    grid.replaceChildren();
+    grid.hidden = !items.length;
+    items.forEach((it, i) => {
+      const w = document.createElement("div");
+      w.className = "thumb";
+      const img = document.createElement("img");
+      img.src = it.src; img.alt = "Image " + (i + 1);
+      bindImage(img, it.src, false);
+      img.addEventListener("error", () => {
+        if (!it.url || !items.includes(it)) return; // seuls les liens peuvent être invalides
+        items = items.filter(x => x !== it);
+        note.textContent = "Ce lien n'est pas une image accessible : " + (it.url || "").slice(0, 80);
+        paint(); changed();
+      });
+      const x = document.createElement("button");
+      x.type = "button"; x.className = "rm"; x.textContent = "×";
+      x.title = "Retirer cette image"; x.setAttribute("aria-label", "Retirer l'image " + (i + 1));
+      x.addEventListener("click", ev => { ev.stopPropagation(); free(it); items = items.filter(y => y !== it); note.textContent = ""; paint(); changed(); });
+      w.append(img, x);
+      grid.appendChild(w);
+    });
+  }
+  function room(n) {
+    if (items.length + n <= MAX_IMAGES) return true;
+    note.textContent = "Maximum " + MAX_IMAGES + " images par message.";
+    return false;
+  }
+  function add(files) {
+    note.textContent = "";
+    const list = [...files].filter(f => f.type.startsWith("image/"));
+    if (!list.length) { if (files.length) note.textContent = "Seules les images sont acceptées."; return; }
+    const keep = list.slice(0, Math.max(0, MAX_IMAGES - items.length));
+    if (keep.length < list.length) note.textContent = "Maximum " + MAX_IMAGES + " images par message.";
+    keep.forEach(f => items.push({ file: f, src: URL.createObjectURL(f) }));
+    paint(); changed();
+  }
+  function addLink(u) {
+    note.textContent = "";
+    if (items.some(it => it.url === u)) return;
+    if (!room(1)) return;
+    items.push({ url: u, src: u });
+    paint(); changed();
+  }
+  fi.addEventListener("change", () => { add(fi.files); fi.value = ""; });
+  if (ta) ta.addEventListener("paste", ev => {
+    const cd = ev.clipboardData;
+    if (!cd) return;
+    const files = [...(cd.files || [])].filter(f => f.type.startsWith("image/"));
+    if (files.length) { ev.preventDefault(); add(files); return; }
+    const t = (cd.getData("text") || "").trim();
+    if (t && !/\s/.test(t) && isImageLink(t)) { ev.preventDefault(); addLink(t); } // lien d'image : joint comme image
+  });
+  const api = {
+    el, any: () => items.length > 0, count: () => items.length, add, addLink,
+    reset() { items.forEach(free); items = []; note.textContent = ""; fi.value = ""; paint(); changed(); },
+    // Envoie les fichiers puis renvoie la valeur à enregistrer : un lien par ligne (ou null)
+    async value() {
+      const out = [];
+      for (const it of items) out.push(it.file ? await uploadImage(it.file) : it.url);
+      return out.length ? out.join("\n") : null;
+    }
+  };
+  imgPickers.add(api);
+  return api;
+}
+
 /* Vocal : reconnu à son nom de fichier « vocal-… » */
 const isAudio = u => /\/vocal-[^/?#]*$/.test(u || "");
 function audioEl(url) {
@@ -465,7 +645,6 @@ function audioEl(url) {
   return a;
 }
 
-
 const BUCKET = "feedback-images", MAX_IMG = 5 * 1024 * 1024;
 const db = supabase.createClient("https://mzjiyusbgtslfzchoykf.supabase.co", "sb_publishable_6JGumr_7n73O3U6MjRdgkw_5mZH46cc");
 const $ = id => document.getElementById(id);
@@ -473,7 +652,7 @@ let uid = null, queue = [], timer = null;
 
 function finish() {
   clearInterval(timer);
-  clearInterval(remindTimer);
+  clearInterval(remindTimer); remindTimer = null; document.body.classList.remove("urgent");
   $("go").disabled = true;
   $("counter").textContent = "Terminé";
   if (window.native) window.native.popupDone(); // ferme le pop-up et libère l'écran
@@ -493,7 +672,7 @@ async function loadAdminNames(force) {
 
 async function fetchUnread() {
   const [fb, rp] = await Promise.all([
-    db.from("feedbacks").select("id,message,image_url,created_at,modele,auteur_id").eq("agent_id", uid).eq("lu", false),
+    db.from("feedbacks").select("*").eq("agent_id", uid).eq("lu", false),
     db.from("reponses").select("id,message,image_url,created_at,feedback_id,auteur_id,feedbacks!inner(agent_id,message)").eq("lu_agent", false).eq("feedbacks.agent_id", uid)
   ]);
   if (fb.error) return null;
@@ -510,7 +689,8 @@ function render() {
   const f = queue[0];
   $("counter").textContent = queue.length > 1 ? `${queue.length} messages à lire` : "1 message à lire";
   const who = adminNames[f.auteur_id];
-  $("title").textContent = f.kind === "rp" ? "Nouvelle réponse de " + (who || "l'administrateur") : (who ? "Nouveau feedback de " + who : "Nouveau feedback");
+  document.body.classList.toggle("urgent", !!f.urgence);
+  $("title").textContent = f.kind === "rp" ? "Nouvelle réponse de " + (who || "l'administrateur") : (f.urgence ? "URGENT · " : "") + (who ? "Nouveau feedback de " + who : "Nouveau feedback");
   $("from").textContent = who ? "De : " + who + " ·" : "";
   $("ctx").hidden = f.kind !== "rp" || !f.ctx;
   $("ctx").textContent = f.kind === "rp" && f.ctx ? "En réponse à : " + f.ctx.slice(0, 160) : "";
@@ -520,31 +700,50 @@ function render() {
   const b = $("bubble");
   b.replaceChildren();
   if (f.message) b.append(document.createTextNode(f.message));
-  if (f.image_url) {
-    if (isAudio(f.image_url)) b.appendChild(audioEl(f.image_url));
+  const us = urlsOf(f.image_url);
+  if (us.length) {
+    if (isAudio(us[0])) b.appendChild(audioEl(us[0]));
     else {
-      const img = document.createElement("img");
-      img.src = f.image_url; img.alt = "Image jointe";
-      bindImage(img, f.image_url, true); // clic = agrandir, clic droit = options
-      b.appendChild(img);
+      const wrap = document.createElement("div");
+      wrap.className = "imgs" + (us.length > 1 ? " multi" : "");
+      us.forEach((u, i) => {
+        const img = document.createElement("img");
+        img.src = u; img.alt = us.length > 1 ? "Image jointe " + (i + 1) : "Image jointe";
+        bindImage(img, u, true); // clic = agrandir, clic droit = options
+        wrap.appendChild(img);
+      });
+      b.appendChild(wrap);
     }
   }
   $("reply").value = "";
   popRec.reset();
+  popPick.reset();
   updateBtn();
   $("go").disabled = false;
   $("reply").focus();
 }
-function updateBtn() { $("go").textContent = ($("reply").value.trim() || popRec.blob()) ? "Envoyer la réponse et continuer" : "Marquer comme lu"; }
+function updateBtn() { $("go").textContent = ($("reply").value.trim() || popRec.blob() || popPick.any()) ? "Envoyer la réponse et continuer" : "Marquer comme lu"; }
 $("reply").addEventListener("input", updateBtn);
 const popRec = voiceRecorder(() => updateBtn());
+const popPick = imagePicker($("reply"), () => updateBtn());
+$("popPick").appendChild(popPick.el);
 $("popVoice").appendChild(popRec.el);
 // Entrée = envoyer la réponse (sans texte ni vocal, Entrée ne ferme pas le pop-up par erreur : utiliser le bouton)
 $("reply").addEventListener("keydown", ev => {
   if (ev.key !== "Enter" || ev.shiftKey || ev.isComposing) return;
   ev.preventDefault();
-  if ($("reply").value.trim() || popRec.blob()) $("go").click();
+  if ($("reply").value.trim() || popRec.blob() || popPick.any()) $("go").click();
 });
+
+async function uploadImage(file) {
+  if (!file.type.startsWith("image/")) throw new Error("Le fichier doit être une image.");
+  if (file.size > MAX_IMG) throw new Error("Image trop lourde (5 Mo maximum).");
+  const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
+  const { error } = await db.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+  if (error) throw new Error(error.message);
+  return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
 
 async function uploadAudio(blob) {
   if (blob.size > MAX_IMG) throw new Error("Vocal trop lourd (5 Mo maximum).");
@@ -556,65 +755,13 @@ async function uploadAudio(blob) {
 }
 
 /* ---------- Sonnette de comptoir dynamique (générée par le navigateur, aucun fichier à ajouter) ---------- */
-const BELL_VOLUME = 0.8;  // 0 = muet, 1 = très fort
-const DINGS = 3;          // nombre de coups à chaque sonnerie
-const GAP = 0.14;         // secondes entre deux coups (plus petit = plus pressé)
-const REMIND_MS = 8000;   // la sonnerie se répète tant que le pop-up n'est pas traité (0 = une seule fois)
-let audioCtx = null, master = null, remindTimer = null;
-
-function ding(t0, gain, base, ring) {
-  const out = audioCtx.createGain();
-  out.gain.value = 0.3 * BELL_VOLUME * gain;
-  out.connect(master);
-
-  // le « clac » métallique du marteau
-  const len = Math.floor(audioCtx.sampleRate * 0.025);
-  const buf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
-  const d = buf.getChannelData(0);
-  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
-  const click = audioCtx.createBufferSource();
-  click.buffer = buf;
-  const hp = audioCtx.createBiquadFilter();
-  hp.type = "highpass";
-  hp.frequency.value = 3500;
-  click.connect(hp).connect(out);
-  click.start(t0);
-
-  // la cloche : notes très aiguës qui s'éteignent à des rythmes différents
-  [[1, 1, 1.5], [1.006, 0.8, 1.5], [2.32, 0.5, 1.0], [4.25, 0.3, 0.6], [6.63, 0.18, 0.35]].forEach(([ratio, amp, decay]) => {
-    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
-    const dur = decay * ring;
-    o.type = "sine";
-    o.frequency.value = base * ratio;
-    g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(amp, t0 + 0.003);
-    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(out);
-    o.start(t0);
-    o.stop(t0 + dur + 0.05);
-  });
-}
-
-function playBell() {
-  if (!BELL_VOLUME) return;
-  try {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      master = audioCtx.createDynamicsCompressor(); // évite la saturation quand les coups se chevauchent
-      master.connect(audioCtx.destination);
-    }
-    audioCtx.resume().then(() => {
-      const t = audioCtx.currentTime + 0.05;
-      for (let i = 0; i < DINGS; i++) {
-        const last = i === DINGS - 1;
-        // chaque coup est un peu plus aigu et plus fort : effet « ça presse » ; le dernier résonne plus longtemps
-        ding(t + i * GAP, 0.8 + i * 0.1, 2650 * (1 + i * 0.07), last ? 1.6 : 0.7);
-      }
-    }).catch(() => {});
-  } catch (e) {}
-}
-function startReminder() {
-  if (REMIND_MS && !remindTimer) remindTimer = setInterval(playBell, REMIND_MS);
+const REMIND_MS = 8000;   // feedback urgent : l'alarme se répète tant que le pop-up n'est pas traité
+let remindTimer = null;
+const ringKind = rows => rows.some(f => f.urgence) ? "urgent" : "simple";
+function syncReminder() {
+  const urgent = queue.some(f => f.urgence);
+  if (urgent && !remindTimer) remindTimer = setInterval(() => { if (queue.some(f => f.urgence)) playRing("urgent"); }, REMIND_MS);
+  if (!urgent && remindTimer) { clearInterval(remindTimer); remindTimer = null; }
 }
 const seen = new Set(); // feedbacks déjà annoncés par la cloche
 
@@ -624,7 +771,9 @@ async function refresh() {
   const prev = queue[0]?.key;
   queue = rows;
   if (!queue.length) return finish();
-  if (queue.some(f => !seen.has(f.key))) { playBell(); startReminder(); } // sonnerie à l'ouverture et à chaque nouveau feedback
+  const fresh = queue.filter(f => !seen.has(f.key));
+  if (fresh.length) playRing(ringKind(fresh)); // simple : une notification discrète ; urgent : alarme
+  syncReminder();
   queue.forEach(f => seen.add(f.key));
   if (queue[0].key !== prev) render();
   else $("counter").textContent = queue.length > 1 ? `${queue.length} messages à lire` : "1 message à lire";
@@ -633,14 +782,15 @@ async function refresh() {
 $("go").addEventListener("click", async () => {
   const f = queue[0];
   if (!f || $("go").disabled) return;
-  const text = $("reply").value.trim(), blob = popRec.blob();
+  const text = $("reply").value.trim(), blob = popRec.blob(), hasImg = popPick.any();
   if (popRec.busy()) { $("err").textContent = "Terminez d'abord l'enregistrement du vocal."; return; }
+  if (blob && hasImg) { $("err").textContent = "Joignez soit des photos, soit un vocal (pas les deux)."; return; }
   $("go").disabled = true;
   $("err").textContent = "";
   try {
-    if (text || blob) {
-      const audio = blob ? await uploadAudio(blob) : null;
-      const { error } = await db.from("reponses").insert({ feedback_id: f.fid, auteur_id: uid, message: text, image_url: audio, lu_admin: false, lu_agent: true });
+    if (text || blob || hasImg) {
+      const attach = blob ? await uploadAudio(blob) : await popPick.value();
+      const { error } = await db.from("reponses").insert({ feedback_id: f.fid, auteur_id: uid, message: text, image_url: attach, lu_admin: false, lu_agent: true });
       if (error) throw new Error(error.message);
     }
     const { data, error } = f.kind === "rp"
