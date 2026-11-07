@@ -762,9 +762,17 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && menuEl) { 
 
 /* Images : télécharger, copier, ouvrir */
 async function imgBlob(src) {
-  const r = await fetch(src);
-  if (!r.ok) throw new Error("http " + r.status);
-  return r.blob();
+  try {
+    const r = await fetch(imgFix.get(src) || src);
+    if (!r.ok) throw new Error("http " + r.status);
+    return await r.blob();
+  } catch (e) {
+    const p = storagePath(src);
+    if (!p) throw e;
+    const { data, error } = await db.storage.from(BUCKET).download(p);
+    if (error || !data) throw e;
+    return data;
+  }
 }
 async function downloadImage(src) {
   try {
@@ -908,7 +916,7 @@ function buildLightbox() {
 function openLightbox(src) {
   if (!LB.el) buildLightbox();
   LB.src = src;
-  LB.img.src = src;
+  LB.img.src = imgFix.get(src) || src;
   lbReset();
   LB.el.classList.add("open");
 }
@@ -1202,6 +1210,32 @@ function audioEl(url) {
   return a;
 }
 
+/* Image robuste : lien public -> URL signée -> téléchargement direct (si le bucket est privé ou le lien public bloqué) */
+const imgFix = new Map(); // lien d'origine -> lien utilisable
+function storagePath(u) {
+  const k = "/feedback-images/", i = (u || "").indexOf(k);
+  return i < 0 ? null : decodeURIComponent(u.slice(i + k.length).split("?")[0]);
+}
+function safeImg(img, url) {
+  let step = 0;
+  img.src = imgFix.get(url) || url;
+  img.addEventListener("error", async () => {
+    const p = storagePath(url);
+    if (!p || step >= 2) { img.alt = "Image indisponible"; return; }
+    step++;
+    try {
+      if (step === 1) {
+        const { data, error } = await db.storage.from(BUCKET).createSignedUrl(p, 3600);
+        if (!error && data && data.signedUrl) { imgFix.set(url, data.signedUrl); img.src = data.signedUrl; return; }
+        step = 2;
+      }
+      const { data, error } = await db.storage.from(BUCKET).download(p);
+      if (!error && data) { const b = URL.createObjectURL(data); imgFix.set(url, b); img.src = b; return; }
+    } catch (e) {}
+    img.alt = "Image indisponible";
+  });
+}
+
 const SUPABASE_URL = "https://mzjiyusbgtslfzchoykf.supabase.co";
 const SUPABASE_KEY = "sb_publishable_6JGumr_7n73O3U6MjRdgkw_5mZH46cc";
 const BUCKET = "feedback-images";
@@ -1416,7 +1450,7 @@ function bubble(kind, metaText, text, imageUrl, opts) {
       wrap.className = "imgs" + (us.length > 1 ? " multi" : "");
       us.forEach((u, i) => {
         const img = document.createElement("img");
-        img.src = u; img.alt = us.length > 1 ? "Image jointe " + (i + 1) : "Image jointe"; img.loading = "lazy";
+        safeImg(img, u); img.alt = us.length > 1 ? "Image jointe " + (i + 1) : "Image jointe";
         bindImage(img, u, true); // clic = agrandir, clic droit = options
         wrap.appendChild(img);
       });
