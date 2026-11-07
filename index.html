@@ -63,11 +63,11 @@ svg.ic{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-wid
 .authlogo .logo{width:56px;height:56px}
 .authlogo b{font-size:20px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(90deg,var(--ink),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
 .authlogo b span{font-weight:500}
-#login,#forgot,#reset{max-width:410px;margin:8vh auto 0;padding:30px 28px 24px;position:relative;overflow:hidden;animation:rise .5s cubic-bezier(.2,.8,.2,1) both;box-shadow:var(--shadow-up)}
-#login::before,#forgot::before,#reset::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3))}
-#login::after,#forgot::after,#reset::after{content:"";position:absolute;width:260px;height:260px;right:-120px;top:-130px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.14),transparent 70%);pointer-events:none}
-#login h1,#forgot h1,#reset h1{text-align:center;font-size:17px;font-weight:700}
-#login>p.muted,#forgot>p.muted,#reset>p.muted{text-align:center;font-size:13px}
+#login,#forgot,#reset,#force{max-width:410px;margin:8vh auto 0;padding:30px 28px 24px;position:relative;overflow:hidden;animation:rise .5s cubic-bezier(.2,.8,.2,1) both;box-shadow:var(--shadow-up)}
+#login::before,#forgot::before,#reset::before,#force::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3))}
+#login::after,#forgot::after,#reset::after,#force::after{content:"";position:absolute;width:260px;height:260px;right:-120px;top:-130px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.14),transparent 70%);pointer-events:none}
+#login h1,#forgot h1,#reset h1,#force h1{text-align:center;font-size:17px;font-weight:700}
+#login>p.muted,#forgot>p.muted,#reset>p.muted,#force>p.muted{text-align:center;font-size:13px}
 
 /* ----- Mise en page : barre du haut + menu + contenu ----- */
 #admin,#agent{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start}
@@ -509,6 +509,20 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
     <button type="button" id="resetBack" class="ghost">Retour à la connexion</button>
   </form>
 
+  <!-- CRÉER UN NOUVEAU MOT DE PASSE (après connexion avec un mot de passe de récupération envoyé par l'admin) -->
+  <form id="force" class="card" hidden>
+    <div class="authlogo"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg><b>Feedback<span> Platform</span></b></div>
+    <h1>Créez votre nouveau mot de passe</h1>
+    <p class="muted" style="margin:0 0 16px">Vous vous êtes connecté avec un mot de passe de récupération envoyé par l'administrateur. Choisissez maintenant votre propre mot de passe pour continuer.</p>
+    <label for="forcePw">Nouveau mot de passe (6 caractères minimum)</label>
+    <input id="forcePw" type="password" minlength="6" autocomplete="new-password" required>
+    <label for="forcePw2">Confirmer le mot de passe</label>
+    <input id="forcePw2" type="password" minlength="6" autocomplete="new-password" required>
+    <button id="forceBtn" type="submit">Enregistrer et continuer</button>
+    <p id="forceMsg" class="msg err" role="alert"></p>
+    <button type="button" id="forceOut" class="ghost">Se déconnecter</button>
+  </form>
+
   <!-- ESPACE ADMIN -->
   <section id="admin" hidden>
     <div class="top">
@@ -624,7 +638,7 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
       <h2 style="margin-top:0">Demandes de mot de passe</h2>
       <div class="card">
         <p class="admin-note">
-          Aucun mot de passe ne peut être changé sans votre validation. En approuvant, un email avec un lien à usage unique est envoyé à l'utilisateur.
+          Aucun mot de passe ne peut être changé sans votre validation. En approuvant, un email avec un lien à usage unique est envoyé à l'utilisateur. Vous pouvez aussi lui envoyer vous-même un mot de passe de récupération : il s'en servira pour se connecter puis créera son nouveau mot de passe.
         </p>
         <div id="pwdList" class="account-grid"></div>
       </div>
@@ -1267,7 +1281,7 @@ let uid = null, agents = [], timer = null, mineFilter = "all", tab = "overview";
 let recovery = /type=recovery/.test(location.hash); // arrivée via le lien « nouveau mot de passe »
 
 function show(name) {
-  ["login", "forgot", "reset", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
+  ["login", "forgot", "reset", "force", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
 }
 function option(value, text) {
   const o = document.createElement("option");
@@ -1897,6 +1911,10 @@ async function route() {
     $("loginErr").textContent = "Ce compte n'a pas de profil. Contactez l'administrateur.";
     return;
   }
+  { // mot de passe de récupération reçu de l'administrateur : il faut d'abord créer son propre mot de passe
+    const fl = await db.from("profiles").select("must_change_password").eq("id", session.user.id).maybeSingle();
+    if (fl.data && fl.data.must_change_password) { await stopPresence(); $("forceMsg").textContent = ""; show("force"); return; }
+  }
   uid = session.user.id;
   startPresence({ id: uid, nom: p.nom, role: p.role, modele: p.modele });
   myModele = p.modele || null;
@@ -2282,7 +2300,18 @@ async function loadPwd() {
         if (e1) { alert("Refus impossible : " + e1.message); return; }
         await loadPwd();
       });
-      actions.append(ok, no);
+      const rec = document.createElement("button");
+      rec.type = "button";
+      rec.textContent = "Envoyer un mot de passe de récupération";
+      rec.addEventListener("click", async () => {
+        const { data: pr } = await db.from("profiles").select("id").eq("email", r.email).maybeSingle();
+        if (!pr) { alert("Compte introuvable pour " + r.email); return; }
+        if (await sendRecoveryPassword(pr.id, r.nom || r.email)) {
+          await db.rpc("admin_resolve_password_request", { req_id: r.id, approve: false }); // la demande est traitée
+          await loadPwd();
+        }
+      });
+      actions.append(rec, ok, no);
     } else {
       const again = document.createElement("button");
       again.type = "button";
@@ -2345,7 +2374,7 @@ function typePicker() {
 }
 
 /* ---------- Mots de passe : bouton Afficher / Masquer ---------- */
-["password", "newPw", "newPw2"].forEach(id => {
+["password", "newPw", "newPw2", "forcePw", "forcePw2"].forEach(id => {
   const inp = $(id), b = document.createElement("button");
   b.type = "button"; b.className = "pwtoggle"; b.textContent = "Afficher le mot de passe";
   b.addEventListener("click", () => { const show = inp.type === "password"; inp.type = show ? "text" : "password"; b.textContent = show ? "Masquer le mot de passe" : "Afficher le mot de passe"; });
@@ -2452,6 +2481,43 @@ function editAgentName(nameEl, pencil, id, current) {
   inp.focus(); inp.select();
 }
 
+/* ---------- Mot de passe de récupération (envoyé par l'administrateur) ---------- */
+function genTempPwd() {
+  const c = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789", a = new Uint32Array(10);
+  crypto.getRandomValues(a);
+  return [...a].map(x => c[x % c.length]).join("");
+}
+function showTempPwd(label, pwd) {
+  const wrap = document.createElement("div");
+  wrap.className = "pmodal";
+  const box = document.createElement("div");
+  box.className = "pmbox";
+  const h = document.createElement("h2"); h.textContent = "Mot de passe de récupération";
+  const sub = document.createElement("p"); sub.className = "sub";
+  sub.textContent = "Pour " + label + " · envoyez-le lui maintenant : il ne sera plus affiché.";
+  const code = document.createElement("div");
+  code.style.cssText = "font:700 24px/1.3 Consolas,monospace;letter-spacing:.08em;text-align:center;padding:14px;margin:0 0 12px;border:1px dashed var(--accent);border-radius:12px;background:var(--accent-soft);user-select:all;overflow-wrap:anywhere";
+  code.textContent = pwd;
+  const note = document.createElement("p"); note.className = "sub";
+  note.textContent = "À la connexion avec ce mot de passe, la plateforme lui demande aussitôt de créer son nouveau mot de passe.";
+  const mk = (t, fn, plain) => { const b = document.createElement("button"); b.type = "button"; b.textContent = t; b.style.marginTop = "8px"; if (plain) b.style.cssText += ";background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:none"; b.addEventListener("click", fn); return b; };
+  const msg = "Voici votre mot de passe de récupération : " + pwd + "\nConnectez-vous avec ce mot de passe : la plateforme vous demandera aussitôt de créer votre nouveau mot de passe.";
+  box.append(h, sub, code, note,
+    mk("Copier le mot de passe", () => copyText(pwd)),
+    mk("Copier le message à envoyer", () => copyText(msg), true),
+    mk("Fermer", () => wrap.remove(), true));
+  wrap.appendChild(box);
+  document.body.appendChild(wrap);
+}
+async function sendRecoveryPassword(id, label) {
+  if (!confirm("Générer un mot de passe de récupération pour " + label + " ?\nSon mot de passe actuel ne fonctionnera plus et ses sessions ouvertes seront fermées.")) return false;
+  const pwd = genTempPwd();
+  const { error } = await db.rpc("admin_set_temp_password", { target_id: id, temp_pwd: pwd });
+  if (error) { alert("Impossible : " + error.message + "\n(le script recovery_password.sql a-t-il été exécuté dans Supabase ?)"); return false; }
+  showTempPwd(label, pwd);
+  return true;
+}
+
 async function loadPending() {
   const { data } = await db.from("profiles").select("id,nom,actif,modele").eq("role", "agent").order("actif").order("nom");
   const list = $("pending");
@@ -2503,6 +2569,13 @@ async function loadPending() {
       });
       actions.appendChild(ok);
     }
+
+    const rec = document.createElement("button");
+    rec.type = "button";
+    rec.textContent = "Mot de passe de récupération";
+    rec.style.cssText = small + ";background:var(--card);color:var(--ink);border:1px solid var(--line);box-shadow:none";
+    rec.addEventListener("click", () => sendRecoveryPassword(p.id, p.nom));
+    actions.appendChild(rec);
 
     const del = document.createElement("button");
     del.textContent = "Supprimer";
@@ -3212,6 +3285,7 @@ function enterSubmit(ids, formId, busyBtnId) {
 enterSubmit(["nom", "email", "password"], "login", "loginBtn");
 enterSubmit(["forgotEmail"], "forgot", "forgotSend");
 enterSubmit(["newPw", "newPw2"], "reset", "resetBtn");
+enterSubmit(["forcePw", "forcePw2"], "force", "forceBtn");
 enterSubmit(["newNom", "newEmail", "newModele", "newPass"], "addForm", "addBtn");
 
 /* ---------- Boutons Actualiser (admin et agent) et Sélectionner (agent) ---------- */
@@ -3227,6 +3301,29 @@ bindRefresh($("refreshAgent"), async () => {
   if (atab === "chat") await loadChat(true);
 });
 $("selAgent").addEventListener("click", toggleSelect);
+
+$("force").addEventListener("submit", async e => {
+  e.preventDefault();
+  const out = $("forceMsg");
+  out.className = "msg err";
+  out.textContent = "";
+  const a = $("forcePw").value, b = $("forcePw2").value;
+  if (a.length < 6) { out.textContent = "6 caractères minimum."; return; }
+  if (a !== b) { out.textContent = "Les deux mots de passe ne correspondent pas."; return; }
+  $("forceBtn").disabled = true;
+  const { error } = await db.rpc("fp_set_own_password", { new_pwd: a });
+  $("forceBtn").disabled = false;
+  if (error) { out.textContent = /différent|autorisé|caractères/i.test(error.message) ? error.message : "Changement impossible : " + error.message; return; }
+  $("forcePw").value = ""; $("forcePw2").value = "";
+  toast("Nouveau mot de passe enregistré");
+  await route();
+});
+$("forceOut").addEventListener("click", async () => {
+  clearInterval(timer);
+  await db.auth.signOut();
+  setMode(false);
+  show("login");
+});
 
 route();
 </script>
