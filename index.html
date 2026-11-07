@@ -63,11 +63,11 @@ svg.ic{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-wid
 .authlogo .logo{width:56px;height:56px}
 .authlogo b{font-size:20px;font-weight:800;letter-spacing:-.3px;background:linear-gradient(90deg,var(--ink),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
 .authlogo b span{font-weight:500}
-#login,#forgot,#reset,#force{max-width:410px;margin:8vh auto 0;padding:30px 28px 24px;position:relative;overflow:hidden;animation:rise .5s cubic-bezier(.2,.8,.2,1) both;box-shadow:var(--shadow-up)}
-#login::before,#forgot::before,#reset::before,#force::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3))}
-#login::after,#forgot::after,#reset::after,#force::after{content:"";position:absolute;width:260px;height:260px;right:-120px;top:-130px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.14),transparent 70%);pointer-events:none}
-#login h1,#forgot h1,#reset h1,#force h1{text-align:center;font-size:17px;font-weight:700}
-#login>p.muted,#forgot>p.muted,#reset>p.muted,#force>p.muted{text-align:center;font-size:13px}
+#login,#forgot,#reset,#force,#code{max-width:410px;margin:8vh auto 0;padding:30px 28px 24px;position:relative;overflow:hidden;animation:rise .5s cubic-bezier(.2,.8,.2,1) both;box-shadow:var(--shadow-up)}
+#login::before,#forgot::before,#reset::before,#force::before,#code::before{content:"";position:absolute;left:0;right:0;top:0;height:4px;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--accent3))}
+#login::after,#forgot::after,#reset::after,#force::after,#code::after{content:"";position:absolute;width:260px;height:260px;right:-120px;top:-130px;border-radius:50%;background:radial-gradient(circle,rgba(124,58,237,.14),transparent 70%);pointer-events:none}
+#login h1,#forgot h1,#reset h1,#force h1,#code h1{text-align:center;font-size:17px;font-weight:700}
+#login>p.muted,#forgot>p.muted,#reset>p.muted,#force>p.muted,#code>p.muted{text-align:center;font-size:13px}
 
 /* ----- Mise en page : barre du haut + menu + contenu ----- */
 #admin,#agent{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start}
@@ -480,6 +480,7 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
     <p id="loginErr" class="msg err" role="alert"></p>
     <button type="button" id="modeBtn" class="ghost">Pas de compte ? Créer un compte</button>
     <button type="button" id="forgotBtn" class="ghost" style="display:block;margin-top:8px">Mot de passe oublié ?</button>
+    <button type="button" id="codeLink" class="ghost" style="display:block;margin-top:8px">J'ai reçu un code de récupération</button>
     <p class="loginpolicy">En vous connectant, vous acceptez la <button type="button" class="ghost" data-policy>politique de présence</button>.</p>
   </form>
 
@@ -487,11 +488,12 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
   <form id="forgot" class="card" hidden>
     <div class="authlogo"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg><b>Feedback<span> Platform</span></b></div>
     <h1>Mot de passe oublié</h1>
-    <p class="muted" style="margin:0 0 16px">Saisissez l'email de votre compte. Votre demande sera transmise à l'administrateur ; après sa validation, vous recevrez un email avec un lien pour choisir un nouveau mot de passe.</p>
+    <p class="muted" style="margin:0 0 16px">Saisissez l'email de votre compte. Votre demande sera transmise à l'administrateur ; après sa validation, vous recevrez par email un code de récupération pour choisir un nouveau mot de passe.</p>
     <label for="forgotEmail">Email</label>
     <input id="forgotEmail" type="email" autocomplete="username" required>
     <button id="forgotSend" type="submit">Envoyer la demande</button>
     <p id="forgotMsg" class="msg" role="status"></p>
+    <button type="button" id="forgotCode" class="ghost" style="display:block;margin-bottom:8px">J'ai déjà reçu un code de récupération</button>
     <button type="button" id="forgotBack" class="ghost">Retour à la connexion</button>
   </form>
 
@@ -507,6 +509,20 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
     <button id="resetBtn" type="submit">Enregistrer</button>
     <p id="resetMsg" class="msg err" role="alert"></p>
     <button type="button" id="resetBack" class="ghost">Retour à la connexion</button>
+  </form>
+
+  <!-- SAISIR LE CODE DE RÉCUPÉRATION reçu par email -->
+  <form id="code" class="card" hidden>
+    <div class="authlogo"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><use href="#logo"/></svg><b>Feedback<span> Platform</span></b></div>
+    <h1>Code de récupération</h1>
+    <p class="muted" style="margin:0 0 16px">Saisissez l'email de votre compte et le code reçu par email après la validation de l'administrateur. Vous pourrez ensuite choisir un nouveau mot de passe.</p>
+    <label for="codeEmail">Email</label>
+    <input id="codeEmail" type="email" autocomplete="username" required>
+    <label for="codeVal">Code reçu par email</label>
+    <input id="codeVal" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="12" placeholder="123456" required style="letter-spacing:.25em;font-weight:700;font-size:18px">
+    <button id="codeBtn" type="submit">Valider le code</button>
+    <p id="codeMsg" class="msg err" role="alert"></p>
+    <button type="button" id="codeBack" class="ghost">Retour à la connexion</button>
   </form>
 
   <!-- CRÉER UN NOUVEAU MOT DE PASSE (après connexion avec un mot de passe de récupération envoyé par l'admin) -->
@@ -638,7 +654,7 @@ html[data-theme=dark] .rpick{border-color:#2d3466}
       <h2 style="margin-top:0">Demandes de mot de passe</h2>
       <div class="card">
         <p class="admin-note">
-          Aucun mot de passe ne peut être changé sans votre validation. En approuvant, un email avec un lien à usage unique est envoyé à l'utilisateur. Vous pouvez aussi lui envoyer vous-même un mot de passe de récupération : il s'en servira pour se connecter puis créera son nouveau mot de passe.
+          Aucun mot de passe ne peut être changé sans votre validation. En approuvant, un email contenant un code de récupération est envoyé à l'adresse de l'utilisateur. Vous pouvez aussi lui envoyer vous-même un mot de passe de récupération : il s'en servira pour se connecter puis créera son nouveau mot de passe.
         </p>
         <div id="pwdList" class="account-grid"></div>
       </div>
@@ -1281,7 +1297,7 @@ let uid = null, agents = [], timer = null, mineFilter = "all", tab = "overview";
 let recovery = /type=recovery/.test(location.hash); // arrivée via le lien « nouveau mot de passe »
 
 function show(name) {
-  ["login", "forgot", "reset", "force", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
+  ["login", "forgot", "reset", "force", "code", "admin", "agent"].forEach(n => { $(n).hidden = n !== name; });
 }
 function option(value, text) {
   const o = document.createElement("option");
@@ -1977,6 +1993,7 @@ function setMode(on) {
   $("loginBtn").textContent = on ? "Créer mon compte" : "Se connecter";
   $("modeBtn").textContent = on ? "Déjà un compte ? Se connecter" : "Pas de compte ? Créer un compte";
   $("forgotBtn").hidden = on;
+  $("codeLink").hidden = on;
   $("password").autocomplete = on ? "new-password" : "current-password";
   $("loginErr").textContent = "";
 }
@@ -2040,7 +2057,7 @@ $("forgot").addEventListener("submit", async e => {
   if (error) { out.textContent = "Envoi impossible : " + error.message + " (le script SQL a-t-il été exécuté ?)"; return; }
   // Même réponse que le compte existe ou non (on ne révèle pas quels emails sont inscrits)
   out.className = "msg ok";
-  out.textContent = "Si un compte correspond à cette adresse, votre demande a été transmise à l'administrateur. Vous recevrez un email dès qu'elle sera validée.";
+  out.textContent = "Si un compte correspond à cette adresse, votre demande a été transmise à l'administrateur. Vous recevrez par email un code de récupération dès qu'elle sera validée.";
 });
 
 /* ---------- Nouveau mot de passe (lien reçu par email après validation) ---------- */
@@ -2099,7 +2116,7 @@ $("pwdChangeBtn").addEventListener("click", async () => {
   const { data: { session } } = await db.auth.getSession();
   const { error } = await db.rpc("request_password_reset", { p_email: session.user.email });
   out.className = error ? "msg err" : "msg ok";
-  out.textContent = error ? "Envoi impossible : " + error.message : "Demande envoyée. Vous recevrez un email dès que l'administrateur l'aura validée.";
+  out.textContent = error ? "Envoi impossible : " + error.message : "Demande envoyée. Vous recevrez par email un code de récupération dès que l'administrateur l'aura validée.";
 });
 
 /* ---------- Espace admin ---------- */
@@ -2271,7 +2288,7 @@ async function loadPwd() {
     when.textContent = fmt(r.created_at);
     const tag = document.createElement("span");
     tag.className = "tag " + (r.status === "pending" ? "unread" : "read");
-    tag.textContent = r.status === "pending" ? "En attente de validation" : "Validée · lien envoyé";
+    tag.textContent = r.status === "pending" ? "En attente de validation" : "Validée · code envoyé";
     info.append(name, mail, when, tag);
 
     const actions = document.createElement("div");
@@ -2279,15 +2296,15 @@ async function loadPwd() {
     if (r.status === "pending") {
       const ok = document.createElement("button");
       ok.type = "button";
-      ok.textContent = "Approuver";
+      ok.textContent = "Approuver et envoyer le code par email";
       ok.style.background = "var(--ok)";
       ok.addEventListener("click", async () => {
-        if (!confirm(`Autoriser ${r.nom || r.email} à changer son mot de passe ?\nUn email avec un lien lui sera envoyé.`)) return;
+        if (!confirm(`Autoriser ${r.nom || r.email} à changer son mot de passe ?\nUn email contenant son code de récupération lui sera envoyé.`)) return;
         ok.disabled = true;
         const { error: e1 } = await db.rpc("admin_resolve_password_request", { req_id: r.id, approve: true });
         if (e1) { alert("Validation impossible : " + e1.message); ok.disabled = false; return; }
         const { error: e2 } = await sendResetLink(r.email);
-        if (e2) alert("Demande validée, mais l'email n'a pas pu être envoyé : " + e2.message + "\nUtilisez « Renvoyer le lien » dans quelques minutes.");
+        if (e2) alert("Demande validée, mais l'email n'a pas pu être envoyé : " + e2.message + "\nUtilisez « Renvoyer le code » dans quelques minutes.");
         await loadPwd();
       });
       const no = document.createElement("button");
@@ -2315,11 +2332,11 @@ async function loadPwd() {
     } else {
       const again = document.createElement("button");
       again.type = "button";
-      again.textContent = "Renvoyer le lien";
+      again.textContent = "Renvoyer le code";
       again.addEventListener("click", async () => {
         again.disabled = true;
         const { error: e2 } = await sendResetLink(r.email);
-        alert(e2 ? "Envoi impossible : " + e2.message : "Lien renvoyé à " + r.email + ".");
+        alert(e2 ? "Envoi impossible : " + e2.message : "Code renvoyé à " + r.email + ".");
         again.disabled = false;
       });
       const cancel = document.createElement("button");
@@ -3301,6 +3318,33 @@ bindRefresh($("refreshAgent"), async () => {
   if (atab === "chat") await loadChat(true);
 });
 $("selAgent").addEventListener("click", toggleSelect);
+
+/* ---------- Code de récupération reçu par email → création du nouveau mot de passe ---------- */
+function openCode() {
+  $("codeEmail").value = $("email").value || $("forgotEmail").value || "";
+  $("codeMsg").textContent = "";
+  show("code");
+}
+$("codeLink").addEventListener("click", openCode);
+$("forgotCode").addEventListener("click", openCode);
+$("codeBack").addEventListener("click", () => show("login"));
+$("code").addEventListener("submit", async e => {
+  e.preventDefault();
+  const out = $("codeMsg");
+  out.className = "msg err";
+  out.textContent = "";
+  const email = $("codeEmail").value.trim().toLowerCase(), token = $("codeVal").value.replace(/\s/g, "");
+  if (!EMAIL_RE.test(email)) { out.textContent = "Veuillez saisir une adresse email valide."; return; }
+  if (!/^\d{6,10}$/.test(token)) { out.textContent = "Le code est composé de 6 à 10 chiffres."; return; }
+  $("codeBtn").disabled = true;
+  const { error } = await db.auth.verifyOtp({ email, token, type: "recovery" });
+  $("codeBtn").disabled = false;
+  if (error) { out.textContent = "Code invalide ou expiré. Vérifiez le code ou refaites une demande."; return; }
+  $("codeVal").value = "";
+  recovery = true; clearInterval(timer);
+  show("reset"); // l'utilisateur choisit maintenant son nouveau mot de passe
+});
+enterSubmit(["codeEmail", "codeVal"], "code", "codeBtn");
 
 $("force").addEventListener("submit", async e => {
   e.preventDefault();
