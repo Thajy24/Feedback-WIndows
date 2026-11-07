@@ -689,12 +689,28 @@ function storagePath(u) {
   const k = "/feedback-images/", i = (u || "").indexOf(k);
   return i < 0 ? null : decodeURIComponent(u.slice(i + k.length).split("?")[0]);
 }
+
+/* Réduit les grosses photos avant envoi (≈ 100-300 Ko au lieu de plusieurs Mo) : économise le quota de bande passante Supabase */
+async function shrinkImage(file) {
+  if (!/^image\/(jpe?g|png|webp|bmp)$/i.test(file.type) || file.size < 250 * 1024) return file;
+  try {
+    const bmp = await createImageBitmap(file);
+    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+    const c = document.createElement("canvas");
+    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+    const x = c.getContext("2d");
+    x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
+    x.drawImage(bmp, 0, 0, c.width, c.height);
+    const b = await new Promise(r => c.toBlob(r, "image/jpeg", 0.82));
+    return b && b.size < file.size ? b : file;
+  } catch (e) { return file; }
+}
 function safeImg(img, url) {
   let step = 0;
   img.src = imgFix.get(url) || url;
   img.addEventListener("error", async () => {
     const p = storagePath(url);
-    if (!p || step >= 2) { img.alt = "Image indisponible"; return; }
+    if (!p || step >= 2) { fail(); return; }
     step++;
     try {
       if (step === 1) {
@@ -705,8 +721,12 @@ function safeImg(img, url) {
       const { data, error } = await db.storage.from(BUCKET).download(p);
       if (!error && data) { const b = URL.createObjectURL(data); imgFix.set(url, b); img.src = b; return; }
     } catch (e) {}
-    img.alt = "Image indisponible";
+    fail();
   });
+  function fail() {
+    img.alt = "Image indisponible";
+    fetch(url).then(r => { img.alt = "Image indisponible (" + r.status + ")"; console.warn("Image KO", r.status, url); }).catch(e => console.warn("Image KO", url, e));
+  }
 }
 
 const BUCKET = "feedback-images", MAX_IMG = 5 * 1024 * 1024;
@@ -804,7 +824,8 @@ async function uploadImage(file) {
   if (file.size > MAX_IMG) throw new Error("Image trop lourde (5 Mo maximum).");
   const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
-  const { error } = await db.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+  const small = await shrinkImage(file);
+  const { error } = await db.storage.from(BUCKET).upload(path, small, { contentType: small.type || file.type, cacheControl: "31536000" });
   if (error) throw new Error(error.message);
   return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
