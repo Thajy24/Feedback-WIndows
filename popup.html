@@ -152,6 +152,10 @@ body.urgent header{background:linear-gradient(135deg,#9f1239,#e11d48 60%,#fb7185
 .lnk{color:var(--accent);text-decoration:underline;text-underline-offset:2px;overflow-wrap:anywhere;word-break:break-word}
 .bubble.sent .lnk{color:inherit;font-weight:600}
 .lnk:hover{text-decoration-thickness:2px}
+
+.mediafail{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px dashed var(--line);border-radius:10px;font-size:12px;color:var(--muted);background:var(--card)}
+.mediafail button{width:auto;min-width:0;margin:0;padding:4px 12px;font-size:12px}
+.bubble.sent .mediafail{background:rgba(255,255,255,.12);color:#fff;border-color:rgba(255,255,255,.4)}
 </style>
 </head>
 <body>
@@ -235,17 +239,9 @@ document.addEventListener("keydown", e => { if (e.key === "Escape" && menuEl) { 
 
 /* Images : télécharger, copier, ouvrir */
 async function imgBlob(src) {
-  try {
-    const r = await fetch(imgFix.get(src) || src);
-    if (!r.ok) throw new Error("http " + r.status);
-    return await r.blob();
-  } catch (e) {
-    const p = storagePath(src);
-    if (!p) throw e;
-    const { data, error } = await db.storage.from(BUCKET).download(p);
-    if (error || !data) throw e;
-    return data;
-  }
+  const r = await fetch(src);
+  if (!r.ok) throw new Error("http " + r.status);
+  return r.blob();
 }
 async function downloadImage(src) {
   try {
@@ -389,7 +385,7 @@ function buildLightbox() {
 function openLightbox(src) {
   if (!LB.el) buildLightbox();
   LB.src = src;
-  LB.img.src = imgFix.get(src) || src;
+  LB.img.src = src;
   lbReset();
   LB.el.classList.add("open");
 }
@@ -417,6 +413,69 @@ function bindImage(img, src, withMenu) {
     const [x, y] = menuPos(ev, img);
     showMenu(x, y, imageMenu(src || img.currentSrc || img.src));
   });
+}
+
+/* ---------- Photos et vocaux : si un fichier ne se charge pas, on réessaie avec un lien signé puis on explique pourquoi ---------- */
+const STORAGE_URL = /\/storage\/v1\/object\/(?:public|sign|authenticated)\/([^/?]+)\/([^?#]+)/;
+function storageHint(msg) {
+  msg = String(msg || "");
+  if (/mime type|not supported/i.test(msg)) return "le stockage refuse ce type de fichier. Exécutez stockage.sql dans Supabase (" + msg + ")";
+  if (/row-level security|policy|not authorized|unauthorized|jwt/i.test(msg)) return "droits de stockage manquants. Exécutez stockage.sql dans Supabase (" + msg + ")";
+  if (/bucket not found/i.test(msg)) return "le dossier de stockage « feedback-images » est introuvable. Exécutez stockage.sql dans Supabase (" + msg + ")";
+  if (/exceed|too large|payload|quota|limit/i.test(msg)) return "fichier trop lourd ou quota de stockage atteint (" + msg + ")";
+  if (/failed to fetch|network/i.test(msg)) return "pas de connexion à Supabase (" + msg + ")";
+  return msg;
+}
+async function storageFallback(url) {
+  const m = STORAGE_URL.exec(url);
+  if (m) {
+    try {
+      const { data, error } = await db.storage.from(m[1]).createSignedUrl(decodeURIComponent(m[2]), 3600);
+      if (!error && data && data.signedUrl) return { url: data.signedUrl };
+    } catch (e) {}
+  }
+  let why = "";
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (r.ok) why = "fichier illisible";
+    else {
+      let j = null;
+      try { j = await r.json(); } catch (e) {}
+      why = "HTTP " + r.status + (j && (j.message || j.error) ? " · " + (j.message || j.error) : "");
+    }
+  } catch (e) { why = "réseau inaccessible"; }
+  return { err: why };
+}
+// el = <img> ou <audio> ; onFail reçoit la raison quand même le lien signé ne fonctionne pas
+function guardMedia(el, url, onFail) {
+  let stage = 0;
+  el.addEventListener("error", async () => {
+    if (stage === 1) { stage = 2; onFail("lien refusé"); return; }
+    if (stage) return;
+    stage = 1;
+    const r = await storageFallback(url);
+    if (r.url) { el.src = r.url; if (el.tagName === "AUDIO") { el.load(); el.play().catch(() => {}); } return; }
+    stage = 2;
+    onFail(r.err);
+  });
+}
+function failBox(why, retry) {
+  const d = document.createElement("div");
+  d.className = "mediafail";
+  const t = document.createElement("span");
+  t.textContent = "Fichier indisponible" + (why ? " (" + why + ")" : "");
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = "Réessayer";
+  b.addEventListener("click", ev => { ev.stopPropagation(); retry(); });
+  d.append(t, b);
+  return d;
+}
+function mediaImg(u, alt) {
+  const img = document.createElement("img");
+  img.src = u; img.alt = alt; img.loading = "lazy";
+  bindImage(img, null, true); // clic = agrandir (utilise l'adresse qui fonctionne), clic droit = options
+  guardMedia(img, u, why => { const box = failBox(why, () => box.replaceWith(mediaImg(u, alt))); img.replaceWith(box); });
+  return img;
 }
 
 /* Message vocal : enregistrer, réécouter, supprimer avant envoi */
@@ -462,10 +521,18 @@ function voiceRecorder(onChange) {
     msg = "";
     if (!navigator.mediaDevices || !window.MediaRecorder) { msg = "Enregistrement vocal indisponible ici."; draw(); return; }
     try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-    catch (e) { msg = "Micro inaccessible : autorisez-le puis réessayez."; draw(); return; }
+    catch (e) {
+      const n = e && e.name;
+      msg = n === "NotAllowedError" || n === "SecurityError" ? "Micro refusé : autorisez-le dans les réglages (appli ou navigateur) puis réessayez."
+        : n === "NotFoundError" || n === "OverconstrainedError" ? "Aucun micro détecté : branchez ou activez un micro."
+        : n === "NotReadableError" || n === "AbortError" ? "Le micro est utilisé par une autre application."
+        : "Micro inaccessible (" + (n || "erreur") + ").";
+      draw(); return;
+    }
     const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"].find(t => MediaRecorder.isTypeSupported(t)) || "";
     chunks = []; cancelled = false;
-    mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream);
+    try { mr = type ? new MediaRecorder(stream, { mimeType: type }) : new MediaRecorder(stream); }
+    catch (e) { stream.getTracks().forEach(t => t.stop()); msg = "Enregistrement impossible (" + (e && e.name || "erreur") + ")."; draw(); return; }
     mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     mr.onstop = () => {
       stream.getTracks().forEach(t => t.stop());
@@ -479,7 +546,8 @@ function voiceRecorder(onChange) {
       draw();
       if (onChange) onChange();
     };
-    mr.start();
+    try { mr.start(); }
+    catch (e) { stream.getTracks().forEach(t => t.stop()); msg = "Enregistrement impossible (" + (e && e.name || "erreur") + ")."; draw(); return; }
     t0 = Date.now();
     state = "rec";
     draw();
@@ -680,53 +748,8 @@ const isAudio = u => /\/vocal-[^/?#]*$/.test(u || "");
 function audioEl(url) {
   const a = document.createElement("audio");
   a.controls = true; a.preload = "none"; a.src = url;
+  guardMedia(a, url, why => { const box = failBox(why, () => box.replaceWith(audioEl(url))); a.replaceWith(box); });
   return a;
-}
-
-/* Image robuste : lien public -> URL signée -> téléchargement direct (si le bucket est privé ou le lien public bloqué) */
-const imgFix = new Map(); // lien d'origine -> lien utilisable
-function storagePath(u) {
-  const k = "/feedback-images/", i = (u || "").indexOf(k);
-  return i < 0 ? null : decodeURIComponent(u.slice(i + k.length).split("?")[0]);
-}
-
-/* Réduit les grosses photos avant envoi (≈ 100-300 Ko au lieu de plusieurs Mo) : économise le quota de bande passante Supabase */
-async function shrinkImage(file) {
-  if (!/^image\/(jpe?g|png|webp|bmp)$/i.test(file.type) || file.size < 250 * 1024) return file;
-  try {
-    const bmp = await createImageBitmap(file);
-    const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
-    const c = document.createElement("canvas");
-    c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-    const x = c.getContext("2d");
-    x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height);
-    x.drawImage(bmp, 0, 0, c.width, c.height);
-    const b = await new Promise(r => c.toBlob(r, "image/jpeg", 0.82));
-    return b && b.size < file.size ? b : file;
-  } catch (e) { return file; }
-}
-function safeImg(img, url) {
-  let step = 0;
-  img.src = imgFix.get(url) || url;
-  img.addEventListener("error", async () => {
-    const p = storagePath(url);
-    if (!p || step >= 2) { fail(); return; }
-    step++;
-    try {
-      if (step === 1) {
-        const { data, error } = await db.storage.from(BUCKET).createSignedUrl(p, 3600);
-        if (!error && data && data.signedUrl) { imgFix.set(url, data.signedUrl); img.src = data.signedUrl; return; }
-        step = 2;
-      }
-      const { data, error } = await db.storage.from(BUCKET).download(p);
-      if (!error && data) { const b = URL.createObjectURL(data); imgFix.set(url, b); img.src = b; return; }
-    } catch (e) {}
-    fail();
-  });
-  function fail() {
-    img.alt = "Image indisponible";
-    fetch(url).then(r => { img.alt = "Image indisponible (" + r.status + ")"; console.warn("Image KO", r.status, url); }).catch(e => console.warn("Image KO", url, e));
-  }
 }
 
 const BUCKET = "feedback-images", MAX_IMG = 5 * 1024 * 1024;
@@ -790,12 +813,7 @@ function render() {
     else {
       const wrap = document.createElement("div");
       wrap.className = "imgs" + (us.length > 1 ? " multi" : "");
-      us.forEach((u, i) => {
-        const img = document.createElement("img");
-        safeImg(img, u); img.alt = us.length > 1 ? "Image jointe " + (i + 1) : "Image jointe";
-        bindImage(img, u, true); // clic = agrandir, clic droit = options
-        wrap.appendChild(img);
-      });
+      us.forEach((u, i) => wrap.appendChild(mediaImg(u, us.length > 1 ? "Image jointe " + (i + 1) : "Image jointe")));
       b.appendChild(wrap);
     }
   }
@@ -824,9 +842,8 @@ async function uploadImage(file) {
   if (file.size > MAX_IMG) throw new Error("Image trop lourde (5 Mo maximum).");
   const ext = (file.name.split(".").pop() || "png").toLowerCase().replace(/[^a-z0-9]/g, "");
   const path = `${uid}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext || "png"}`;
-  const small = await shrinkImage(file);
-  const { error } = await db.storage.from(BUCKET).upload(path, small, { contentType: small.type || file.type, cacheControl: "31536000" });
-  if (error) throw new Error(error.message);
+  const { error } = await db.storage.from(BUCKET).upload(path, file, { contentType: file.type });
+  if (error) throw new Error(storageHint(error.message));
   return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
@@ -835,7 +852,7 @@ async function uploadAudio(blob) {
   const ext = /mp4/.test(blob.type) ? "m4a" : /ogg/.test(blob.type) ? "ogg" : "webm";
   const path = `${uid}/vocal-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const { error } = await db.storage.from(BUCKET).upload(path, blob, { contentType: blob.type || "audio/webm" });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(storageHint(error.message));
   return db.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
